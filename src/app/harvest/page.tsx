@@ -7,8 +7,7 @@ import {
   bunchHarvests,
 } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
-import { HarvestForm } from "./harvest-form";
-import { deleteBunchHarvest } from "@/app/actions/harvest";
+import { HarvestClient, type RecentHarvest } from "./harvest-form";
 
 export default async function HarvestPage() {
   const allFields = await db
@@ -31,11 +30,13 @@ export default async function HarvestPage() {
     .from(fieldInventory)
     .innerJoin(varieties, eq(fieldInventory.varietyId, varieties.id));
 
-  const recent = await db
+  const recentRows = await db
     .select({
       id: bunchHarvests.id,
+      fieldId: bunchHarvests.fieldId,
       fieldName: fields.name,
       siteName: sites.name,
+      varietyId: bunchHarvests.varietyId,
       varietyName: varieties.name,
       bunches: bunchHarvests.bunches,
       harvestDate: bunchHarvests.harvestDate,
@@ -58,55 +59,25 @@ export default async function HarvestPage() {
     }
   }
 
+  const recent: RecentHarvest[] = recentRows.map((r) => ({
+    id: r.id,
+    fieldId: r.fieldId,
+    fieldName: r.fieldName,
+    siteName: r.siteName,
+    varietyId: r.varietyId,
+    varietyName: r.varietyName,
+    bunches: r.bunches,
+    harvestDate: r.harvestDate,
+  }));
+
   return (
     <div className="p-4">
-      <h1 className="text-2xl font-bold text-gray-900 mb-4">
-        Record Harvest
-      </h1>
-
-      <HarvestForm fields={allFields} fieldVarietyMap={fieldVarietyMap} />
-
-      {recent.length > 0 && (
-        <div className="mt-8">
-          <h2 className="text-base font-semibold text-gray-900 mb-3">
-            Recent Harvests
-          </h2>
-          <div className="space-y-2">
-            {recent.map((h) => (
-              <div
-                key={h.id}
-                className="flex items-center justify-between bg-white rounded-xl border border-gray-200 px-4 py-3"
-              >
-                <div>
-                  <p className="font-medium text-gray-900 text-sm">
-                    {h.siteName} {h.fieldName} · {h.varietyName}
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    {h.bunches} bunches ·{" "}
-                    {new Date(h.harvestDate + "T00:00:00").toLocaleDateString(
-                      "en-US",
-                      { month: "short", day: "numeric", year: "numeric" }
-                    )}
-                  </p>
-                </div>
-                <form
-                  action={async () => {
-                    "use server";
-                    await deleteBunchHarvest(h.id);
-                  }}
-                >
-                  <button
-                    type="submit"
-                    className="text-sm text-red-600 font-medium px-2 py-1"
-                  >
-                    Delete
-                  </button>
-                </form>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">Harvest</h1>
+      <HarvestClient
+        fields={allFields}
+        fieldVarietyMap={fieldVarietyMap}
+        recent={recent}
+      />
     </div>
   );
 }

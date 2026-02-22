@@ -44,7 +44,7 @@ export default async function FieldsPage() {
         <h1 className="text-2xl font-bold text-gray-900">Fields</h1>
         <Link
           href="/fields/new"
-          className="bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
+          className="bg-green-700 text-white px-5 py-3 rounded-xl text-base font-semibold"
         >
           + Add Field
         </Link>

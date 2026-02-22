@@ -18,13 +18,13 @@ export default async function NewFieldPage() {
 
       <form action={createField} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-base font-medium text-gray-700 mb-1">
             Site <span className="text-red-500">*</span>
           </label>
           <select
             name="siteId"
             required
-            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base bg-white"
+            className="w-full border border-gray-300 rounded-xl px-4 py-4 text-lg bg-white"
           >
             <option value="">Select site...</option>
             {allSites.map((s) => (
@@ -36,7 +36,7 @@ export default async function NewFieldPage() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-base font-medium text-gray-700 mb-1">
             Field name <span className="text-red-500">*</span>
           </label>
           <input
@@ -44,12 +44,12 @@ export default async function NewFieldPage() {
             name="name"
             required
             placeholder="e.g. K1, B3"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base bg-white"
+            className="w-full border border-gray-300 rounded-xl px-4 py-4 text-lg bg-white"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-base font-medium text-gray-700 mb-1">
             Size (acres)
           </label>
           <input
@@ -57,24 +57,24 @@ export default async function NewFieldPage() {
             name="sizeAcres"
             step="0.1"
             min="0"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base bg-white"
+            className="w-full border border-gray-300 rounded-xl px-4 py-4 text-lg bg-white"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-base font-medium text-gray-700 mb-1">
             Notes
           </label>
           <input
             type="text"
             name="notes"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base bg-white"
+            className="w-full border border-gray-300 rounded-xl px-4 py-4 text-lg bg-white"
           />
         </div>
 
         <button
           type="submit"
-          className="w-full bg-green-700 text-white py-3 rounded-xl font-semibold text-base"
+          className="w-full bg-green-700 text-white py-5 rounded-xl font-semibold text-xl"
         >
           Create Field
         </button>
