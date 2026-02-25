@@ -5,6 +5,7 @@ import {
   sites,
   varieties,
   bunchHarvests,
+  weightHarvests,
   orders,
 } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -116,13 +117,37 @@ export default async function ForecastPage() {
     );
   }
 
-  // --- Build 6-month chart data ---
+  // --- Build 9-month chart data: 3 past (actuals) + 6 forward (forecast) ---
   const today = new Date();
-  const sixMonthsOut = new Date(today);
-  sixMonthsOut.setMonth(today.getMonth() + 6);
 
-  // Collect all variety names that appear in the next 6 months
+  // Fetch actual weight harvests for variety breakdown
+  const actualRows = await db
+    .select({
+      varietyName: varieties.name,
+      pounds: weightHarvests.pounds,
+      harvestDate: weightHarvests.harvestDate,
+    })
+    .from(weightHarvests)
+    .innerJoin(varieties, eq(weightHarvests.varietyId, varieties.id));
+
+  // Group actuals by month-key → variety → total pounds
+  const actualsByMonth: Record<string, Record<string, number>> = {};
+  for (const h of actualRows) {
+    const [yr, mo] = h.harvestDate.split("-");
+    const key = `${yr}-${mo}`;
+    if (!actualsByMonth[key]) actualsByMonth[key] = {};
+    actualsByMonth[key][h.varietyName] =
+      (actualsByMonth[key][h.varietyName] || 0) + parseFloat(h.pounds);
+  }
+
+  // Collect all variety names from both actuals (past 3 months) and forecast (next 6)
   const chartVarietySet = new Set<string>();
+  for (let i = -3; i < 0; i++) {
+    const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    for (const v of Object.keys(actualsByMonth[key] ?? {})) chartVarietySet.add(v);
+  }
+  const sixMonthsOut = new Date(today.getFullYear(), today.getMonth() + 6, 0);
   for (const event of forecast) {
     if (event.expectedDate >= today && event.expectedDate <= sixMonthsOut) {
       chartVarietySet.add(event.varietyName);
@@ -130,28 +155,32 @@ export default async function ForecastPage() {
   }
   const chartVarieties = [...chartVarietySet].sort();
 
-  // Build a row for every calendar month in the window (even if empty)
+  // Build one row per month: i = -3 (3 months ago) … +5 (5 months ahead)
   const chartData: ChartMonth[] = [];
-  for (let i = 0; i < 6; i++) {
+  for (let i = -3; i < 6; i++) {
     const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
     const year = d.getFullYear();
     const month = d.getMonth() + 1;
     const monthKey = `${year}-${String(month).padStart(2, "0")}`;
-    const label = d.toLocaleDateString("en-US", {
-      month: "short",
-      year: "2-digit",
-    });
+    const label = d.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+    const isActual = i < 0;
 
-    const row: ChartMonth = { monthLabel: label };
+    const row: ChartMonth = { monthLabel: label, isActual };
     for (const v of chartVarieties) row[v] = 0;
 
-    const groupMatch = grouped.find((g) => g.monthKey === monthKey);
-    if (groupMatch) {
-      for (const event of groupMatch.events) {
-        if (chartVarieties.includes(event.varietyName)) {
-          row[event.varietyName] =
-            (Number(row[event.varietyName]) || 0) +
-            Math.round(event.expectedPounds);
+    if (isActual) {
+      const monthActuals = actualsByMonth[monthKey] ?? {};
+      for (const [vName, lbs] of Object.entries(monthActuals)) {
+        if (chartVarieties.includes(vName)) row[vName] = Math.round(lbs);
+      }
+    } else {
+      const groupMatch = grouped.find((g) => g.monthKey === monthKey);
+      if (groupMatch) {
+        for (const event of groupMatch.events) {
+          if (chartVarieties.includes(event.varietyName)) {
+            row[event.varietyName] =
+              (Number(row[event.varietyName]) || 0) + Math.round(event.expectedPounds);
+          }
         }
       }
     }
