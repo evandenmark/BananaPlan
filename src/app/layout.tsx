@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { BottomNav } from "@/components/nav";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "BananaPlan",
   description: "Banana farm management",
