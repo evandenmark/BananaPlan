@@ -2,6 +2,11 @@ import Link from "next/link";
 
 const sections = [
   {
+    label: "Sites",
+    description: "Manage farm sites",
+    href: "/sites",
+  },
+  {
     label: "Varieties",
     description: "Manage banana variety specs",
     href: "/varieties",
