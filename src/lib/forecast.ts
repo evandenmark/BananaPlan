@@ -57,9 +57,25 @@ export function computeForecast(
     harvestTotals[key] = (harvestTotals[key] ?? 0) + h.bunches;
   }
 
+  // Sort rows by first expected harvest date so deductions hit the earliest planting first
+  const sortedRows = [...inventoryRows].sort((a, b) => {
+    const aDate = addMonths(
+      new Date(a.plantingDate + "T00:00:00"),
+      parseFloat(a.monthsToFirstBunch)
+    );
+    const bDate = addMonths(
+      new Date(b.plantingDate + "T00:00:00"),
+      parseFloat(b.monthsToFirstBunch)
+    );
+    return aDate.getTime() - bDate.getTime();
+  });
+
+  // Mutable remaining tracker shared across rows with the same fieldId:varietyId
+  const harvestRemaining: Record<string, number> = { ...harvestTotals };
+
   const results: ForecastEvent[] = [];
 
-  for (const row of inventoryRows) {
+  for (const row of sortedRows) {
     const successRate = parseFloat(row.successRate);
     const survivingMats = Math.floor(row.numberOfMats * successRate);
     if (survivingMats === 0) continue;
@@ -81,9 +97,10 @@ export function computeForecast(
       events.push({ date, bunches: survivingMats, bunchIndex: i });
     }
 
-    // Subtract harvested bunches from earliest events first
+    // Subtract harvested bunches from earliest events first,
+    // sharing the remaining count across all rows with the same fieldId:varietyId
     const key = `${row.fieldId}:${row.varietyId}`;
-    let remaining = harvestTotals[key] ?? 0;
+    let remaining = harvestRemaining[key] ?? 0;
 
     for (const event of events) {
       if (remaining <= 0) break;
@@ -95,6 +112,9 @@ export function computeForecast(
         remaining = 0;
       }
     }
+
+    // Don't carry surplus to future plantings — excess harvest is simply absorbed
+    harvestRemaining[key] = 0;
 
     // Only include future events with bunches remaining
     for (const event of events) {
