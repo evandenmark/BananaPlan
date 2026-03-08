@@ -128,7 +128,7 @@ export function HarvestClient({
             <div className="flex items-center gap-4 p-4 border-b border-gray-200">
               <button
                 onClick={() => setMode("idle")}
-                className="text-gray-500 text-2xl leading-none"
+                className="text-gray-500 text-2xl leading-none active:opacity-60 transition-opacity"
               >
                 ✕
               </button>
@@ -139,7 +139,7 @@ export function HarvestClient({
                 <button
                   key={f.id}
                   onClick={() => handleFieldSelect(f.id)}
-                  className="bg-gray-50 border-2 border-gray-200 rounded-2xl py-8 flex flex-col items-center justify-center gap-1 active:bg-gray-100"
+                  className="bg-gray-50 border-2 border-gray-200 rounded-2xl py-8 flex flex-col items-center justify-center gap-1 active:bg-gray-100 active:scale-95 transition-transform"
                 >
                   <span className="text-3xl font-bold text-gray-900">
                     {f.name}
@@ -159,7 +159,7 @@ export function HarvestClient({
             <div className="flex items-center gap-4 p-4 border-b border-gray-200">
               <button
                 onClick={() => setMode("harvest-field")}
-                className="text-sm font-medium text-gray-500"
+                className="text-sm font-medium text-gray-500 active:opacity-60 transition-opacity"
               >
                 ← Back
               </button>
@@ -182,7 +182,7 @@ export function HarvestClient({
                   <div className="flex items-center justify-between">
                     <button
                       onClick={() => adjust(v.id, -1)}
-                      className="w-20 h-20 rounded-2xl bg-gray-200 text-4xl font-bold text-gray-700 flex items-center justify-center active:bg-gray-300"
+                      className="w-20 h-20 rounded-2xl bg-gray-200 text-4xl font-bold text-gray-700 flex items-center justify-center active:bg-gray-300 active:scale-90 transition-transform"
                     >
                       −
                     </button>
@@ -191,7 +191,7 @@ export function HarvestClient({
                     </span>
                     <button
                       onClick={() => adjust(v.id, +1)}
-                      className="w-20 h-20 rounded-2xl bg-green-600 text-4xl font-bold text-white flex items-center justify-center active:bg-green-700"
+                      className="w-20 h-20 rounded-2xl bg-green-600 text-4xl font-bold text-white flex items-center justify-center active:bg-green-700 active:scale-90 transition-transform"
                     >
                       +
                     </button>
@@ -206,7 +206,7 @@ export function HarvestClient({
                   isPending ||
                   Object.values(counts).every((n) => n === 0)
                 }
-                className="w-full bg-green-700 text-white py-5 rounded-2xl font-bold text-xl disabled:opacity-40"
+                className="w-full bg-green-700 text-white py-5 rounded-2xl font-bold text-xl disabled:opacity-40 active:scale-95 disabled:active:scale-100 transition-transform"
               >
                 {isPending ? "Saving…" : "Submit"}
               </button>
@@ -220,7 +220,7 @@ export function HarvestClient({
             <div className="flex items-center gap-4 p-4 border-b border-gray-200">
               <button
                 onClick={() => setMode("idle")}
-                className="text-gray-500 text-2xl leading-none"
+                className="text-gray-500 text-2xl leading-none active:opacity-60 transition-opacity"
               >
                 ✕
               </button>
@@ -275,7 +275,7 @@ export function HarvestClient({
               <button
                 onClick={handleEditSubmit}
                 disabled={isPending}
-                className="w-full bg-green-700 text-white py-5 rounded-2xl font-bold text-xl disabled:opacity-40"
+                className="w-full bg-green-700 text-white py-5 rounded-2xl font-bold text-xl disabled:opacity-40 active:scale-95 disabled:active:scale-100 transition-transform"
               >
                 {isPending ? "Saving…" : "Save Changes"}
               </button>
@@ -291,7 +291,7 @@ export function HarvestClient({
     <>
       <button
         onClick={() => setMode("harvest-field")}
-        className="w-full bg-green-700 text-white py-10 rounded-2xl font-bold text-3xl mb-8 active:bg-green-800"
+        className="w-full bg-green-700 text-white py-10 rounded-2xl font-bold text-3xl mb-8 active:bg-green-800 active:scale-95 transition-transform"
       >
         Harvest
       </button>
@@ -325,14 +325,14 @@ export function HarvestClient({
                 <div className="flex gap-1">
                   <button
                     onClick={() => openEdit(h)}
-                    className="text-base text-blue-600 font-semibold px-3 py-2"
+                    className="text-base text-blue-600 font-semibold px-3 py-2 active:opacity-60 transition-opacity"
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => handleDelete(h.id)}
                     disabled={isPending}
-                    className="text-base text-red-600 font-semibold px-3 py-2 disabled:opacity-40"
+                    className="text-base text-red-600 font-semibold px-3 py-2 disabled:opacity-40 active:opacity-60 transition-opacity"
                   >
                     Delete
                   </button>

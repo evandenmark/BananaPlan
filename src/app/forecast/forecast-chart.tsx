@@ -117,7 +117,7 @@ export function ForecastChart({ data, varieties }: Props) {
       <div className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-hide">
         <button
           onClick={() => setSelected("all")}
-          className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+          className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition-colors active:scale-95 ${
             selected === "all"
               ? "bg-gray-900 text-white border-gray-900"
               : "bg-white text-gray-600 border-gray-300"

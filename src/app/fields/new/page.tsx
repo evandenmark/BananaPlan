@@ -74,7 +74,7 @@ export default async function NewFieldPage() {
 
         <button
           type="submit"
-          className="w-full bg-green-700 text-white py-5 rounded-xl font-semibold text-xl"
+          className="w-full bg-green-700 text-white py-5 rounded-xl font-semibold text-xl active:scale-95 transition-transform"
         >
           Create Field
         </button>

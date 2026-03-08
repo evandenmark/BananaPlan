@@ -100,7 +100,7 @@ export default async function NewInventoryPage({
 
         <button
           type="submit"
-          className="w-full bg-green-700 text-white py-3 rounded-xl font-semibold text-base"
+          className="w-full bg-green-700 text-white py-3 rounded-xl font-semibold text-base active:scale-95 transition-transform"
         >
           Add to Field
         </button>

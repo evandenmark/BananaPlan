@@ -51,7 +51,7 @@ export default async function ClientDetailPage({
         <div className="flex gap-3">
           <Link
             href={`/clients/${clientId}/edit`}
-            className="text-sm text-green-700 font-medium"
+            className="text-sm text-green-700 font-medium active:opacity-60 transition-opacity"
           >
             Edit
           </Link>
@@ -61,7 +61,7 @@ export default async function ClientDetailPage({
               await deleteClient(clientId);
             }}
           >
-            <button type="submit" className="text-sm text-red-600 font-medium">
+            <button type="submit" className="text-sm text-red-600 font-medium active:opacity-60 transition-opacity">
               Delete
             </button>
           </form>
@@ -72,7 +72,7 @@ export default async function ClientDetailPage({
         <h2 className="text-base font-semibold text-gray-900">Orders</h2>
         <Link
           href={`/clients/${clientId}/orders/new`}
-          className="bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium"
+          className="bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium active:scale-95 transition-transform"
         >
           + Add Order
         </Link>
@@ -116,7 +116,7 @@ export default async function ClientDetailPage({
                 <div className="flex gap-2 ml-3 shrink-0">
                   <Link
                     href={`/clients/${clientId}/orders/${order.id}/edit`}
-                    className="text-sm text-green-700 font-medium px-2 py-1"
+                    className="text-sm text-green-700 font-medium px-2 py-1 active:opacity-60 transition-opacity"
                   >
                     Edit
                   </Link>
@@ -128,7 +128,7 @@ export default async function ClientDetailPage({
                   >
                     <button
                       type="submit"
-                      className="text-sm text-red-600 font-medium px-2 py-1"
+                      className="text-sm text-red-600 font-medium px-2 py-1 active:opacity-60 transition-opacity"
                     >
                       Delete
                     </button>

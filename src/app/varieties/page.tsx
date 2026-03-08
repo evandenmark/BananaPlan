@@ -16,7 +16,7 @@ export default async function VarietiesPage() {
         <h1 className="text-2xl font-bold text-gray-900">Varieties</h1>
         <Link
           href="/varieties/new"
-          className="bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
+          className="bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium active:scale-95 transition-transform"
         >
           + Add
         </Link>
@@ -72,7 +72,7 @@ export default async function VarietiesPage() {
                 <div className="flex gap-2 ml-3 shrink-0">
                   <Link
                     href={`/varieties/${v.id}/edit`}
-                    className="text-sm text-green-700 font-medium px-2 py-1"
+                    className="text-sm text-green-700 font-medium px-2 py-1 active:opacity-60 transition-opacity"
                   >
                     Edit
                   </Link>
@@ -84,7 +84,7 @@ export default async function VarietiesPage() {
                   >
                     <button
                       type="submit"
-                      className="text-sm text-red-600 font-medium px-2 py-1"
+                      className="text-sm text-red-600 font-medium px-2 py-1 active:opacity-60 transition-opacity"
                     >
                       Delete
                     </button>

@@ -93,7 +93,7 @@ export default async function WeightLogPage() {
 
           <button
             type="submit"
-            className="w-full bg-green-700 text-white py-3 rounded-xl font-semibold text-base"
+            className="w-full bg-green-700 text-white py-3 rounded-xl font-semibold text-base active:scale-95 transition-transform"
           >
             Save
           </button>
@@ -132,7 +132,7 @@ export default async function WeightLogPage() {
                 >
                   <button
                     type="submit"
-                    className="text-sm text-red-600 font-medium px-2 py-1"
+                    className="text-sm text-red-600 font-medium px-2 py-1 active:opacity-60 transition-opacity"
                   >
                     Delete
                   </button>
