@@ -4,7 +4,22 @@ Two servers are configured in [`.mcp.json`](../.mcp.json). The rationale for
 these boundaries is [ADR 0006](decisions/0006-mcp-boundaries.md); this page is
 the routing table.
 
-**The rule in one line:** MCP is for looking at production, not for changing it.
+**The rule in one line:** MCP is for looking at production, not for changing it —
+and never for spending money.
+
+## No MCP tool may spend money
+
+Enforced two ways, not just documented:
+
+1. The Supabase URL serves only `docs,database,debugging,development`. Its
+   `account` group (`create_project`, `restore_project`, `get_cost`,
+   `confirm_cost`) and `branching` group (billed per branch, paid plans only) are
+   **not exposed at all**. Adding them back means editing a committed file.
+2. `.claude/settings.json` denies every purchasing tool by name on both servers,
+   so the boundary holds even if the URL is widened. Vercel has no server-side
+   filter, so for Vercel this list is the only control.
+
+If something genuinely needs buying, say what and why. The owner does it.
 
 ---
 
@@ -31,10 +46,15 @@ Start with `list_tables` before reasoning about structure, and with `get_logs` +
 
 | Tool | Why not |
 | --- | --- |
-| `apply_migration` | Schema comes from `src/db/schema.ts` via `drizzle-kit push` ([0002](decisions/0002-drizzle-push-no-migrations.md)). A migration applied here creates a second source of truth that the next push will silently revert. |
-| `execute_sql` with DDL or writes | Same reason for DDL. For a data fix during an incident: state the exact statement first, then run it. Never as a routine step. |
-| `create_branch` / `merge_branch` / `rebase_branch` / `reset_branch` / `delete_branch` | The project does not use database branching. Denied in `.claude/settings.json`. |
-| `deploy_edge_function` | There are no edge functions. Server Actions cover mutations ([0001](decisions/0001-server-actions-and-server-components.md)). |
+| `apply_migration` | **Denied.** Schema comes from `src/db/schema.ts` via `drizzle-kit push` ([0002](decisions/0002-drizzle-push-no-migrations.md)). A column added here exists in Supabase but not in `schema.ts`, so the next push diffs it, decides it does not belong, and drops it. Silent data loss. |
+| `execute_sql` with DDL | Same reason. |
+| `execute_sql` writes | For incident recovery only. State the exact statement before running it. Never a routine step. |
+| Account, branching, and edge-function tools | **Not exposed** — those groups are switched off in the server URL. Branching also costs money. |
+
+Schema management is not off-limits to agents; it just goes through
+`schema.ts` + `drizzle-kit push` (the `schema-change` skill), which needs a
+terminal. That laptop requirement is a known, accepted cost — ADR 0006 records
+the alternatives if it ever stops being worth it.
 
 ### Which connection string
 
@@ -77,10 +97,12 @@ Supabase tools, not the Vercel ones.
 
 ### Never
 
-`buy_domain`, `buy_pro`, `buy_credits`, `buy_addon` — these spend real money
-against a payment method on file and have no undo. They are **denied** in
-[`.claude/settings.json`](../.claude/settings.json). If a purchase is genuinely
-needed, tell the owner what and why; they do it themselves.
+`buy_domain`, `buy_pro`, `buy_credits`, `buy_addon`, `get_purchase_quote`,
+`check_domain_availability_and_price`, `get_domain_order` — the whole purchasing
+surface spends real money against a payment method on file, with no undo. All
+**denied** in [`.claude/settings.json`](../.claude/settings.json). Vercel's MCP
+has no server-side feature filter, so this list is the only thing standing
+between an agent and a domain purchase; keep it complete when Vercel adds tools.
 
 `deploy_to_vercel` is not the deploy path either. Deployment is `git push` to
 `main` — see the `ship` skill. Use the Vercel tools to *verify* what that push
