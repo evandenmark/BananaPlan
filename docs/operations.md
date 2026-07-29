@@ -130,6 +130,33 @@ confirm it works rather than waiting a day to find out.
 is **public**, so a refresh after any client exists would publish their name.
 `seed-data.sql` is now only a small fixture for seeding a local database.
 
+## What this costs
+
+The target is zero, and both jobs are built for it.
+
+**Vercel crons are not a billable product.** There is no per-cron charge; a cron
+invocation is an ordinary function invocation and draws on the same included
+allowance as any page request. Two per day is ~60 invocations a month, each a few
+`count(*)` queries lasting milliseconds — far less than one person browsing the
+app for a minute. This is why the no-sleep rule matters: billing is by wall-clock
+execution, so a sleeping function is the one way to make a trivial job cost
+something.
+
+**GitHub Actions** is free for public repos. The backup repo is private, which
+draws on the Free plan's monthly minutes; a daily run of a minute or two is a
+small fraction of it. Check Settings → Billing if in doubt.
+
+Two things that would actually cost money, neither currently in play:
+
+- **Supabase Pro** (~$25/mo) removes project pausing and adds real backups. The
+  keepalive cron exists to avoid needing it.
+- **Vercel Pro** (~$20/mo). Hobby is intended for non-commercial use — worth
+  knowing, since this app runs a working farm's operations. Not a decision to
+  make on Vercel's behalf, but do not be surprised by it.
+
+Exact allowances change, so do not trust numbers written here over the source:
+`vercel usage`, or the dashboard's Usage tab.
+
 ## Driving the jobs from the CLI
 
 `gh` is authenticated and does everything needed for both repos — there is no
