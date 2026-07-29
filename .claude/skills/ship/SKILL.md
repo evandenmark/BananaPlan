@@ -75,6 +75,18 @@ ADR the change produced in the same commit, so `git log` ties decision to code.
 git push origin main
 ```
 
+**Committing is not deploying.** If the user asked only to commit, say plainly
+that the change is not in production and that a push is what deploys it — do not
+leave them to infer it. Nothing is live until `origin/main` has it:
+
+```bash
+git log --oneline origin/main..main   # must be empty after pushing
+```
+
+This has bitten once: `CRON_SECRET` was configured and the project redeployed
+while `vercel.json` and the cron route sat in unpushed commits, so the endpoint
+404'd and no cron was ever registered.
+
 ## Verify — this is the part that gets skipped
 
 A push is not a deploy. Confirm it:

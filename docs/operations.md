@@ -55,6 +55,22 @@ The endpoint runs a `count(*)` read. A query is activity; there is no heartbeat
 table and there should not be one — see
 [ADR 0010](decisions/0010-database-keepalive.md).
 
+### How it actually triggers
+
+Nothing in the app starts it, and setting `CRON_SECRET` does not start it either.
+Vercel reads the `crons` array in [`vercel.json`](../vercel.json) **at deploy
+time**, registers the schedule, and its own scheduler then makes a plain HTTP
+`GET` to that path — the same as any outside visitor, except it attaches
+`Authorization: Bearer $CRON_SECRET`.
+
+Three consequences worth internalising:
+
+- The cron exists only once a **deployment containing `vercel.json`** is live. No
+  deploy, no cron — and a redeploy of unpushed code registers nothing.
+- Crons run on **production** deployments only, never previews.
+- Confirm it in the Vercel dashboard under the project's **Cron Jobs** tab. If
+  that tab is empty, the deployment being served has no `vercel.json`.
+
 **Setup:** set `CRON_SECRET` in Vercel's environment variables to any random
 string. Vercel sends it automatically as a bearer token, and the endpoint
 enforces it when present. Without it the endpoint still works but is publicly
@@ -91,6 +107,62 @@ confirm it works rather than waiting a day to find out.
 [ADR 0007](decisions/0007-seed-data-as-backup.md) and is withdrawn: the app repo
 is **public**, so a refresh after any client exists would publish their name.
 `seed-data.sql` is now only a small fixture for seeding a local database.
+
+## Driving the jobs from the CLI
+
+`gh` is authenticated and does everything needed for both repos — there is no
+GitHub MCP server configured, and none is needed.
+
+```bash
+gh run list   --repo evandenmark/bananaplan-backups --limit 5
+gh workflow run backup.yml --repo evandenmark/bananaplan-backups   # trigger now
+gh run view <run-id> --repo evandenmark/bananaplan-backups --log-failed
+gh secret list --repo evandenmark/bananaplan-backups               # names only
+```
+
+After changing the workflow, **trigger a run and read the result.** Three of the
+first four runs failed for reasons no amount of reading the YAML would have
+caught; see below.
+
+### Backup failures already seen, and their fixes
+
+Both are guarded in the workflow now. They are recorded because the symptoms are
+misleading, not because they are likely to recur.
+
+**`pg_dump: aborting because of server version mismatch`.** Supabase runs
+Postgres 17.6 and the GitHub runner ships `pg_dump` 16, which refuses to dump a
+newer server. Installing `postgresql-client-17` is **not sufficient** —
+`/usr/bin/pg_dump` is Debian's `pg_wrapper`, which keeps selecting the
+preinstalled 16. `/usr/lib/postgresql/17/bin` has to go on `PATH` via
+`GITHUB_PATH`, which applies to *subsequent* steps, so the version check is its
+own step.
+
+**A dump that succeeds but cannot be restored.** Without `-n public`, `pg_dump`
+also captures Supabase's managed schemas — `auth`, `storage`, `realtime`,
+`vault`, `pgbouncer`, `graphql` — and their internal migration bookkeeping.
+Restoring that into a fresh project fights the platform's own provisioning. It
+also inflated the schema dump from 12 KB to 156 KB, which is the visible tell.
+The workflow now fails if any managed schema reappears.
+
+A correct dump is roughly **7 KB of data and 12 KB of schema**, contains only
+`public`, and includes `setval` calls so sequences restore and later inserts do
+not collide. If the sizes jump by an order of magnitude, suspect `-n public`.
+
+## Committed is not deployed
+
+Vercel deploys on **push to `main`**, not on commit. Local commits change
+nothing in production, and a redeploy of an unpushed branch redeploys the old
+code — which looks exactly like a broken feature.
+
+Before concluding that something deployed is broken, check:
+
+```bash
+git log --oneline origin/main..main   # must be empty
+```
+
+This has bitten once already: `CRON_SECRET` was set and the project redeployed
+while `vercel.json` and the keepalive route were still sitting in unpushed
+commits, so `/api/cron/keepalive` returned 404 and no cron was ever registered.
 
 ## What to check when production is broken
 

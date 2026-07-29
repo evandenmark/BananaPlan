@@ -129,10 +129,15 @@ The open work, in rough order of value:
 - **Surface shortfalls before they happen.** The per-month shortfall is visible
   only by opening `/forecast` and reading it. Nothing surfaces "you are short in
   November" on the home screen.
-- **Reliability of the production database** — see
-  [ADR 0007](decisions/0007-seed-data-as-backup.md); the free-tier Supabase
-  project has already been lost once, and data entered on the deployed app is not
-  in the committed snapshot until someone refreshes it from local.
+- **Durability of the production database** — largely addressed as of
+  2026-07-28, and worth knowing the shape of. The free-tier project has been lost
+  once already, to the 7-day inactivity pause. Two scheduled jobs now cover it: a
+  daily Vercel cron keeps the project awake
+  ([ADR 0010](decisions/0010-database-keepalive.md)) and a daily GitHub Action
+  backs production up to a private repo
+  ([ADR 0011](decisions/0011-automated-production-backups.md)). What remains is a
+  24-hour worst-case data loss window and the fact that both jobs fail silently —
+  see [docs/operations.md](operations.md) for what to watch.
 
 ## 7. How to change this document
 
