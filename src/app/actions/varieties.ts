@@ -3,8 +3,8 @@
 import { db } from "@/db";
 import { varieties } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { revalidateFor } from "@/lib/revalidate";
 
 export async function createVariety(formData: FormData) {
   await db.insert(varieties).values({
@@ -20,6 +20,7 @@ export async function createVariety(formData: FormData) {
     successRate: formData.get("successRate") as string,
     notes: (formData.get("notes") as string) || null,
   });
+  revalidateFor(["varieties"]);
   redirect("/varieties");
 }
 
@@ -44,10 +45,11 @@ export async function updateVariety(id: number, formData: FormData) {
       updatedAt: new Date(),
     })
     .where(eq(varieties.id, id));
+  revalidateFor(["varieties"]);
   redirect("/varieties");
 }
 
 export async function deleteVariety(id: number) {
   await db.delete(varieties).where(eq(varieties.id, id));
-  revalidatePath("/varieties");
+  revalidateFor(["varieties"]);
 }

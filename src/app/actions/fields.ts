@@ -3,8 +3,8 @@
 import { db } from "@/db";
 import { fields, fieldInventory } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { revalidateFor } from "@/lib/revalidate";
 
 export async function createField(formData: FormData) {
   const result = await db
@@ -17,6 +17,7 @@ export async function createField(formData: FormData) {
     })
     .returning({ id: fields.id });
 
+  revalidateFor(["fields"]);
   redirect(`/fields/${result[0].id}`);
 }
 
@@ -31,6 +32,7 @@ export async function updateField(id: number, formData: FormData) {
       updatedAt: new Date(),
     })
     .where(eq(fields.id, id));
+  revalidateFor(["fields"], { "/fields/[id]": id });
   redirect(`/fields/${id}`);
 }
 
@@ -42,7 +44,7 @@ export async function addInventory(fieldId: number, formData: FormData) {
     plantingDate: formData.get("plantingDate") as string,
     notes: (formData.get("notes") as string) || null,
   });
-  revalidatePath(`/fields/${fieldId}`);
+  revalidateFor(["fieldInventory"], { "/fields/[id]": fieldId });
   redirect(`/fields/${fieldId}`);
 }
 
@@ -61,10 +63,11 @@ export async function updateInventory(
       updatedAt: new Date(),
     })
     .where(eq(fieldInventory.id, id));
+  revalidateFor(["fieldInventory"], { "/fields/[id]": fieldId });
   redirect(`/fields/${fieldId}`);
 }
 
 export async function deleteInventory(id: number, fieldId: number) {
   await db.delete(fieldInventory).where(eq(fieldInventory.id, id));
-  revalidatePath(`/fields/${fieldId}`);
+  revalidateFor(["fieldInventory"], { "/fields/[id]": fieldId });
 }

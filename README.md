@@ -1,36 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# BananaPlan
 
-## Getting Started
+Operations and harvest forecasting for a working banana farm. Track what is
+planted where, record what was picked, and project what will be ready and when.
 
-First, run the development server:
+Production: https://bananaplan.vercel.app
+
+## Running it
 
 ```bash
+brew services list | grep postgresql   # Postgres must be running
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Needs `DATABASE_URL` in `.env` pointing at a local `bananaplan` database.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Command | |
+| --- | --- |
+| `npm run dev` | dev server |
+| `npm run test:run` | tests once (168 tests, ~2s) |
+| `npm test` | tests in watch mode |
+| `npm run build` | production build |
+| `npx drizzle-kit push` | apply `src/db/schema.ts` to the database |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Stack
 
-## Learn More
+Next.js 16 (App Router) · TypeScript · Tailwind v4 · Drizzle ORM over `pg` ·
+Postgres (local for dev, Supabase for production) · Vitest · deployed on Vercel.
 
-To learn more about Next.js, take a look at the following resources:
+Reads happen in Server Components, writes in Server Actions. No API routes.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Documentation
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Written for AI agents, useful to humans.
 
-## Deploy on Vercel
+- **[CLAUDE.md](CLAUDE.md)** — entrypoint: where everything is, and the standing
+  rules
+- **[docs/constitution.md](docs/constitution.md)** — what the app is, who it
+  serves, and the invariants that must hold
+- **[docs/decisions/](docs/decisions/)** — why the code is the way it is (ADRs)
+- **[docs/glossary.md](docs/glossary.md)** — mats, bunches, cycles, success rates
+- **[docs/mcp.md](docs/mcp.md)** — which MCP tools to use, and which never to
+- **[.claude/skills/](.claude/skills/)** — procedures for the recurring kinds of
+  change
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Layout
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+src/db/schema.ts        source of truth for the database
+src/lib/forecast.ts     the forecasting math
+src/app/actions/        server actions, one file per entity
+src/app/<entity>/       list / new / [id]/edit pages
+src/components/nav.tsx  bottom navigation
+seed-data.sql           committed data snapshot; also the backup
+```

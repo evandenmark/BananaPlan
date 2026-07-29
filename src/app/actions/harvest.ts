@@ -3,8 +3,8 @@
 import { db } from "@/db";
 import { bunchHarvests, weightHarvests } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { revalidateFor } from "@/lib/revalidate";
 
 export async function recordBunchHarvest(formData: FormData) {
   await db.insert(bunchHarvests).values({
@@ -14,8 +14,7 @@ export async function recordBunchHarvest(formData: FormData) {
     harvestDate: formData.get("harvestDate") as string,
     notes: (formData.get("notes") as string) || null,
   });
-  revalidatePath("/harvest");
-  revalidatePath("/forecast");
+  revalidateFor(["bunchHarvests"]);
   redirect("/harvest");
 }
 
@@ -34,8 +33,7 @@ export async function recordBunchHarvestBatch(
       notes: null,
     }))
   );
-  revalidatePath("/harvest");
-  revalidatePath("/forecast");
+  revalidateFor(["bunchHarvests"]);
 }
 
 export async function updateBunchHarvest(
@@ -46,14 +44,12 @@ export async function updateBunchHarvest(
     .update(bunchHarvests)
     .set({ bunches: data.bunches, harvestDate: data.harvestDate, varietyId: data.varietyId })
     .where(eq(bunchHarvests.id, id));
-  revalidatePath("/harvest");
-  revalidatePath("/forecast");
+  revalidateFor(["bunchHarvests"]);
 }
 
 export async function deleteBunchHarvest(id: number) {
   await db.delete(bunchHarvests).where(eq(bunchHarvests.id, id));
-  revalidatePath("/harvest");
-  revalidatePath("/forecast");
+  revalidateFor(["bunchHarvests"]);
 }
 
 export async function recordWeightHarvest(formData: FormData) {
@@ -63,11 +59,11 @@ export async function recordWeightHarvest(formData: FormData) {
     harvestDate: formData.get("harvestDate") as string,
     notes: (formData.get("notes") as string) || null,
   });
-  revalidatePath("/weight-log");
+  revalidateFor(["weightHarvests"]);
   redirect("/weight-log");
 }
 
 export async function deleteWeightHarvest(id: number) {
   await db.delete(weightHarvests).where(eq(weightHarvests.id, id));
-  revalidatePath("/weight-log");
+  revalidateFor(["weightHarvests"]);
 }

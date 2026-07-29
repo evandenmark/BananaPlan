@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(npm run test:run:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx drizzle-kit push:*)",
+      "Bash(psql bananaplan:*)",
+      "Bash(pg_dump bananaplan:*)",
+      "Bash(brew services list:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "mcp__supabase__list_tables",
+      "mcp__supabase__list_migrations",
+      "mcp__supabase__list_extensions",
+      "mcp__supabase__get_logs",
+      "mcp__supabase__get_advisors",
+      "mcp__supabase__get_project_url",
+      "mcp__supabase__search_docs",
+      "mcp__vercel__list_deployments",
+      "mcp__vercel__get_deployment",
+      "mcp__vercel__get_deployment_build_logs",
+      "mcp__vercel__get_runtime_errors",
+      "mcp__vercel__get_runtime_logs",
+      "mcp__vercel__get_project",
+      "mcp__vercel__search_vercel_documentation"
+    ],
+    "deny": [
+      "mcp__vercel__buy_domain",
+      "mcp__vercel__buy_pro",
+      "mcp__vercel__buy_credits",
+      "mcp__vercel__buy_addon",
+      "mcp__vercel__get_purchase_quote",
+      "mcp__vercel__check_domain_availability_and_price",
+      "mcp__supabase__apply_migration",
+      "mcp__supabase__create_branch",
+      "mcp__supabase__delete_branch",
+      "mcp__supabase__merge_branch",
+      "mcp__supabase__rebase_branch",
+      "mcp__supabase__reset_branch",
+      "mcp__supabase__deploy_edge_function",
+      "Read(./.env)",
+      "Read(./.env.local)"
+    ]
+  }
+}
