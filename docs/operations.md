@@ -11,17 +11,18 @@ locally scheduled job would also have been off.
 Neither job is fully live until these are done. They involve credentials, so the
 owner must do them; an agent cannot.
 
-- [ ] **Backup:** add `DIRECT_URL` (session pooler, port 5432) as a repository
-      secret in [`bananaplan-backups`](https://github.com/evandenmark/bananaplan-backups/settings/secrets/actions),
-      then run the workflow manually from the Actions tab and confirm
-      `dumps/production-data.sql` appears. **Until this is done there is no
-      automated backup** — the workflow exits with an error on every run.
-- [ ] **Keepalive:** set `CRON_SECRET` to any random string in Vercel's
-      environment variables, then redeploy. The cron works without it; the
-      endpoint is just publicly callable until then.
+- [x] **Backup — done 2026-07-28.** `DIRECT_URL` is set as a repository secret
+      and the workflow has run successfully; `dumps/` holds a real dump of all
+      eight tables.
+- [ ] **Keepalive:** generate a secret with `openssl rand -hex 32`, set it as
+      `CRON_SECRET` in Vercel's environment variables (Production scope), then
+      **redeploy** — environment changes do not apply to existing deployments.
+      The cron works without this; the endpoint is just publicly callable until
+      then.
 
-Until the backup's first successful run, the only copy of production data is the
-local Homebrew Postgres database. Treat that as load-bearing and do not drop it.
+`CRON_SECRET` is a value you invent, not one you look up. Vercel sends it
+automatically as `Authorization: Bearer <value>` on cron invocations, and the
+endpoint checks it.
 
 ## The scheduled jobs
 

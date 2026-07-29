@@ -1,15 +1,8 @@
 # 0011. Back production up daily to a private repo
 
-- **Status:** Accepted — **not yet operational**, see below
+- **Status:** Accepted — operational since 2026-07-28
 - **Supersedes:** [0007](0007-seed-data-as-backup.md)
 - **Date:** 2026-07-28
-
-> **The backup has never successfully run.** The workflow exists but exits with
-> an error until `DIRECT_URL` is set as a repository secret in the backup repo,
-> which only the owner can do. Until then the local Homebrew Postgres database
-> remains the only copy of production data, exactly as under
-> [0007](0007-seed-data-as-backup.md). See the activation checklist in
-> [docs/operations.md](../operations.md).
 - **Affects:** disaster recovery, `seed-data.sql`, https://github.com/evandenmark/bananaplan-backups
 
 ## Context
@@ -77,6 +70,20 @@ names.
   which must be rotated there too if the database password changes.
 - **Cost:** the restore path is now documented in two places (this repo's
   `db-ops` skill and the backup repo's README). They must not drift.
+
+### Two things learned bringing it up, worth not rediscovering
+
+- **`pg_dump` must be version 17+, and installing the package is not enough.**
+  Supabase runs Postgres 17.6; the GitHub runner ships 16, and `pg_dump` refuses
+  to dump a newer server. `apt-get install postgresql-client-17` alone does not
+  fix it, because `/usr/bin/pg_dump` is Debian's `pg_wrapper`, which keeps
+  selecting 16. `/usr/lib/postgresql/17/bin` has to go on `PATH` explicitly.
+- **`-n public` is mandatory.** Without it, `pg_dump` also captures Supabase's
+  managed schemas — `auth`, `storage`, `realtime`, `vault`, `pgbouncer`,
+  `graphql` — and their internal migration bookkeeping. Restoring that into a
+  fresh project fights the platform's own provisioning, so the dump is not
+  actually restorable. It also inflated the schema dump from 12 KB to 156 KB.
+  The workflow now fails if a managed schema ever reappears.
 
 ## Alternatives considered
 
