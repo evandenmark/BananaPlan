@@ -14,8 +14,11 @@ worse, silently reversing them.
 | [0004](0004-two-harvest-types.md) | Two separate harvest tables: bunches and weights | Accepted |
 | [0005](0005-small-connection-pool.md) | `pg` pool capped at 3 connections | Accepted |
 | [0006](0006-mcp-boundaries.md) | MCP servers are read-mostly; Drizzle owns schema | Accepted |
-| [0007](0007-seed-data-as-backup.md) | `seed-data.sql` + local Postgres is the backup strategy | Accepted |
+| [0007](0007-seed-data-as-backup.md) | `seed-data.sql` + local Postgres is the backup strategy | Superseded by [0011](0011-automated-production-backups.md) |
 | [0008](0008-centralized-revalidation.md) | Revalidate through a shared table→route map | Accepted |
+| [0009](0009-adversarial-review-before-commit.md) | Adversarial review before every non-trivial commit | Accepted |
+| [0010](0010-database-keepalive.md) | Daily Vercel cron keeps the free-tier database awake | Accepted |
+| [0011](0011-automated-production-backups.md) | Daily automated backups to a private repo | Accepted |
 
 Keep this table in sync — it is the part agents actually read.
 

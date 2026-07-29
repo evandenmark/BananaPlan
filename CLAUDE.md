@@ -14,6 +14,7 @@ documents it points to.
 | Why the code is the way it is | [docs/decisions/](docs/decisions/) |
 | The domain vocabulary (mat, bunch, cycle, success rate) | [docs/glossary.md](docs/glossary.md) |
 | Which MCP server to use, and what not to touch | [docs/mcp.md](docs/mcp.md) |
+| What runs on a schedule, and what to do when it stops | [docs/operations.md](docs/operations.md) |
 | How to perform a specific kind of change | `.claude/skills/` — see below |
 
 ## Skills
@@ -46,13 +47,23 @@ See [ADR 0001](docs/decisions/0001-server-actions-and-server-components.md) and
 
 ## Standing rules for agents
 
-1. **Run `npm run test:run` before you claim a change works.** 168 tests, ~2s.
-2. **Never write dates as `new Date("YYYY-MM-DD")` in tests.** That parses as UTC
+1. **Get an adversarial review before you commit.** For any change that touches
+   `src/`, changes behavior, or changes infrastructure, spawn the
+   [`adversarial-reviewer`](.claude/agents/adversarial-reviewer.md) subagent
+   against your diff, then say in your output what you fixed and what you
+   rejected and why. Docs-only and typo changes are exempt. See
+   [ADR 0009](docs/decisions/0009-adversarial-review-before-commit.md).
+2. **Run `npm run test:run` before you claim a change works.** 174 tests, ~2s.
+3. **Never write dates as `new Date("YYYY-MM-DD")` in tests.** That parses as UTC
    and lands on the previous day in Hawaii (UTC-10). Use
    `new Date(year, monthIndex, day)`.
-3. **Never edit the production database to change schema.** Schema flows one way:
+4. **Never edit the production database to change schema.** Schema flows one way:
    `src/db/schema.ts` → `drizzle-kit push`. See [docs/mcp.md](docs/mcp.md).
-4. **Never `cp -r` `node_modules`.** It converts `.bin/` symlinks into real files
+5. **Never `cp -r` `node_modules`.** It converts `.bin/` symlinks into real files
    and breaks the `next` binary. Run `npm install` instead.
-5. **Log the decision, not just the code.** If you chose between real
+6. **Never refresh `seed-data.sql` from production.** This repo is **public**;
+   production data includes client names. Backups go to the private
+   [`bananaplan-backups`](https://github.com/evandenmark/bananaplan-backups)
+   repo automatically ([ADR 0011](docs/decisions/0011-automated-production-backups.md)).
+7. **Log the decision, not just the code.** If you chose between real
    alternatives, run the `log-decision` skill before finishing.

@@ -1,0 +1,121 @@
+# Operations
+
+Everything that runs on a schedule, where it runs, and what to do when it stops.
+
+**Nothing here depends on a laptop being awake.** That is deliberate: the July
+2026 outage happened during a five-month gap in work, which is exactly when a
+locally scheduled job would also have been off.
+
+## ⚠️ Activation checklist — both jobs need one manual step
+
+Neither job is fully live until these are done. They involve credentials, so the
+owner must do them; an agent cannot.
+
+- [ ] **Backup:** add `DIRECT_URL` (session pooler, port 5432) as a repository
+      secret in [`bananaplan-backups`](https://github.com/evandenmark/bananaplan-backups/settings/secrets/actions),
+      then run the workflow manually from the Actions tab and confirm
+      `dumps/production-data.sql` appears. **Until this is done there is no
+      automated backup** — the workflow exits with an error on every run.
+- [ ] **Keepalive:** set `CRON_SECRET` to any random string in Vercel's
+      environment variables, then redeploy. The cron works without it; the
+      endpoint is just publicly callable until then.
+
+Until the backup's first successful run, the only copy of production data is the
+local Homebrew Postgres database. Treat that as load-bearing and do not drop it.
+
+## The scheduled jobs
+
+| Job | Runs on | Schedule | Defined in |
+| --- | --- | --- | --- |
+| Database keepalive | Vercel Cron | daily, 14:00 UTC (04:00 HST) | [`vercel.json`](../vercel.json) → [`/api/cron/keepalive`](../src/app/api/cron/keepalive/route.ts) |
+| Production backup | GitHub Actions | daily, 11:00 UTC (01:00 HST) | [`bananaplan-backups`](https://github.com/evandenmark/bananaplan-backups) (private) |
+
+They are offset by three hours on purpose, and they run on different services, so
+each is a partial backstop for the other — the backup job's daily connection is
+itself database activity, and the keepalive does not depend on GitHub.
+
+### Why two different services
+
+Vercel runs the keepalive because it has no inactivity rule: the cron fires as
+long as the deployment exists, including through months of nobody touching the
+project. GitHub Actions runs the backup because it has `pg_dump` and free
+storage, but it **disables scheduled workflows after 60 days of repository
+inactivity** — which makes it the wrong home for the job whose entire purpose is
+surviving long quiet periods.
+
+## Database keepalive
+
+Supabase pauses Free plan projects with low activity over a **7-day** window, and
+deletes them 90 days after pausing. Their guidance is "a few user requests to the
+database each day," so this runs **daily** — a 72-hour interval would leave four
+days of a 7-day window with no activity.
+
+The endpoint runs a `count(*)` read. A query is activity; there is no heartbeat
+table and there should not be one — see
+[ADR 0010](decisions/0010-database-keepalive.md).
+
+**Setup:** set `CRON_SECRET` in Vercel's environment variables to any random
+string. Vercel sends it automatically as a bearer token, and the endpoint
+enforces it when present. Without it the endpoint still works but is publicly
+callable.
+
+**Checking it:** Vercel dashboard → project → Cron Jobs shows run history. Or
+call it directly — it returns the planting count and a timestamp:
+
+```bash
+curl -s -H "Authorization: Bearer $CRON_SECRET" https://bananaplan.vercel.app/api/cron/keepalive
+```
+
+(The header is required once `CRON_SECRET` is set; without it the call returns
+401, which means the protection is working, not that the cron is broken.)
+
+A failed ping returns 500, so it shows as a failed run rather than silently
+succeeding while the database is unreachable.
+
+## Production backup
+
+Daily `pg_dump` of production, committed to the private
+[`bananaplan-backups`](https://github.com/evandenmark/bananaplan-backups) repo.
+Both data and schema are dumped, the job refuses to commit a dump that is empty
+or missing tables, and **git history is the retention** — every day the job ran
+is a recoverable commit.
+
+**Setup:** add `DIRECT_URL` (session pooler, port 5432) as a repository secret in
+the backup repo, then trigger the workflow by hand from the Actions tab to
+confirm it works rather than waiting a day to find out.
+
+**Restoring:** see the `db-ops` skill, or the backup repo's README.
+
+**Do not refresh `seed-data.sql` from production.** That instruction came from
+[ADR 0007](decisions/0007-seed-data-as-backup.md) and is withdrawn: the app repo
+is **public**, so a refresh after any client exists would publish their name.
+`seed-data.sql` is now only a small fixture for seeding a local database.
+
+## What to check when production is broken
+
+1. **Does `/more` render while everything else 500s?** Then it is the database,
+   not the code — `/more` is the only route with no database dependency.
+2. `mcp__supabase__get_logs` and `mcp__supabase__get_advisors`.
+3. `mcp__supabase__list_tables` — if the project answers but has no tables, the
+   structure is gone; restore per the `db-ops` skill.
+4. If the project does not answer at all, check the pooler fleet prefix
+   (`aws-1-`, not `aws-0-`) before concluding it was deleted.
+5. `mcp__vercel__get_runtime_errors` for what the app actually threw.
+
+## What to check when a scheduled job is broken
+
+**The database paused anyway.** The keepalive stopped. Check Vercel's Cron Jobs
+history: a deleted deployment, a renamed route, or a removed `vercel.json` all
+silently stop it. Supabase emails a warning roughly a week before pausing — that
+email is the real alarm, so do not filter it.
+
+**No new backup commits.** Do not reason from the absence of commits — the job
+commits only when data changed, so silence is ambiguous. Check the **Actions tab
+run history** instead, which distinguishes the three cases: green runs with no
+commit (normal, quiet period), red runs (broken — usually a missing or rotated
+`DIRECT_URL`), or no runs at all (never activated, or the workflow was disabled
+after 60 days of repo inactivity; GitHub emails before disabling).
+
+Both jobs failing at once is the dangerous case, because the second failure is
+invisible while the first is masking it. If you have not seen a backup commit in
+a week, check both.

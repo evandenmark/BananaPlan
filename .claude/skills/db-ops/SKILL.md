@@ -1,6 +1,6 @@
 ---
 name: db-ops
-description: Inspect, seed, back up, or restore the BananaPlan database, local or production. Use for connecting with psql, refreshing seed-data.sql, rebuilding a lost Supabase project, diagnosing production database errors, or answering questions about which connection string to use.
+description: Inspect, seed, back up, or restore the BananaPlan database, local or production. Use for connecting with psql, restoring from the automated backups, seeding a local database, rebuilding a lost Supabase project, diagnosing production database errors, or answering questions about which connection string to use.
 ---
 
 # Database operations
@@ -11,7 +11,7 @@ Two databases:
 | --- | --- | --- |
 | Host | Homebrew Postgres | Supabase `hjkmldyptkmlalgdwjzs`, `us-west-2` |
 | Database | `bananaplan`, user `evandenmark`, no password | pooled |
-| Role | development **and the de facto backup** | live |
+| Role | development; last-resort copy until the automated backup runs | live |
 
 Structure comes from `src/db/schema.ts` only — see the `schema-change` skill and
 [ADR 0002](../../../docs/decisions/0002-drizzle-push-no-migrations.md). This
@@ -71,18 +71,22 @@ Prefer the Supabase MCP tools for reads — they need no local credentials:
 [docs/mcp.md](../../../docs/mcp.md) and
 [ADR 0006](../../../docs/decisions/0006-mcp-boundaries.md).
 
-## Refreshing the backup snapshot
+## Backups
 
-`seed-data.sql` is a committed `pg_dump --data-only --column-inserts` snapshot of
-the **local** database, including `setval` calls so sequences land correctly and
-later inserts do not collide.
+Production is backed up **automatically, daily** to the private
+[`bananaplan-backups`](https://github.com/evandenmark/bananaplan-backups) repo by
+a GitHub Actions job ([ADR 0011](../../../docs/decisions/0011-automated-production-backups.md)).
+Nothing manual is required, and no laptop is involved. See
+[docs/operations.md](../../../docs/operations.md).
+
+**Never refresh `seed-data.sql` from production.** This repo is public and
+production data contains client names. That instruction came from
+[ADR 0007](../../../docs/decisions/0007-seed-data-as-backup.md) and is withdrawn.
+`seed-data.sql` is now only a fixture for seeding a local database:
 
 ```bash
-pg_dump bananaplan --data-only --column-inserts > seed-data.sql
+psql bananaplan -v ON_ERROR_STOP=1 -f seed-data.sql
 ```
-
-Do this after meaningful data changes, or it drifts
-([ADR 0007](../../../docs/decisions/0007-seed-data-as-backup.md)).
 
 `seed-local.sql`, if present, is an older hand-written fixture — superseded,
 intentionally untracked, do not use it.
@@ -94,19 +98,36 @@ When the Supabase project has been lost or recreated. Takes about a minute once
 
 1. Update `DATABASE_URL` and `DIRECT_URL` in `.env` for the new project ref,
    observing all three gotchas above.
-2. Create structure:
+2. Clone the backup repo and **check that a dump actually exists**:
 
    ```bash
-   npx drizzle-kit push --force
+   gh repo clone evandenmark/bananaplan-backups
+   ls -l bananaplan-backups/dumps/
    ```
 
-   Eight tables, the `frequency` enum, and the FK constraints.
-
-3. Load data:
+   If `dumps/` holds only `.gitkeep`, the backup job has never run successfully —
+   see the activation checklist in
+   [docs/operations.md](../../../docs/operations.md). **Do not proceed as though
+   a backup exists.** Fall back to the local database, which is then the only
+   surviving copy:
 
    ```bash
-   psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f seed-data.sql
+   pg_dump bananaplan --data-only --column-inserts > /tmp/local-recovery.sql
    ```
+
+   To restore a day other than the most recent, `git log --oneline dumps/` and
+   `git checkout <sha> -- dumps/`.
+
+3. Restore schema, then data:
+
+   ```bash
+   psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f bananaplan-backups/dumps/production-schema.sql
+   psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f bananaplan-backups/dumps/production-data.sql
+   ```
+
+   If the schema dump is unavailable, `npx drizzle-kit push --force` recreates
+   structure from `src/db/schema.ts` instead — eight tables, the `frequency`
+   enum, and the FK constraints — then load the data dump on top.
 
 4. **Verify through `DATABASE_URL`**, not `DIRECT_URL` — that is the path
    production uses, and the two fail independently. `mcp__supabase__list_tables`

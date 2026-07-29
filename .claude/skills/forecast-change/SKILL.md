@@ -86,7 +86,7 @@ do not change the column types — precision on yield and weight matters
    fails for the right reason before the change is the only real proof it did
    what you meant.
 4. Make the change.
-5. `npm run test:run` — all 168 must pass. If a forecast test now fails, decide
+5. `npm run test:run` — all 174 must pass. If a forecast test now fails, decide
    deliberately whether it encoded the old behavior (update it, and say so) or
    caught a genuine regression (fix the code). Never edit a test purely to make
    it pass.

@@ -1,8 +1,14 @@
 # 0007. `seed-data.sql` plus local Postgres is the backup strategy
 
-- **Status:** Accepted
+- **Status:** Superseded by [0011](0011-automated-production-backups.md)
 - **Date:** 2026-07-28
 - **Affects:** `seed-data.sql`, local development database, disaster recovery
+
+> **Superseded the same day.** Backups are now automatic, daily, and in a private
+> repo. In particular, the instruction below to refresh `seed-data.sql` from
+> production data is **withdrawn** — the app repo is public, so following it
+> would publish client names. `seed-data.sql` remains a local seed fixture.
+> Everything else here still describes the restore mechanics accurately.
 
 ## Context
 

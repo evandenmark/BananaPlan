@@ -11,6 +11,22 @@ is not the path — a `git push` is.
 
 ## Pre-flight
 
+### 1. Adversarial review
+
+Unless the change is docs-only, spawn the
+[`adversarial-reviewer`](../../agents/adversarial-reviewer.md) subagent against
+your diff **before** committing
+([ADR 0009](../../../docs/decisions/0009-adversarial-review-before-commit.md)).
+
+Then respond to every finding in your user-visible output: what you fixed, and
+what you rejected and why. A finding silently dropped is indistinguishable from
+one that was never read. If the review comes back clean, say that too.
+
+Do not treat the reviewer as authoritative — it will occasionally flag
+deliberate decisions. Check the ADRs before "fixing" something it objects to.
+
+### 2. Checks
+
 Run all three. Do not skip the build because the tests passed; Next catches
 things Vitest does not.
 
@@ -26,9 +42,16 @@ npx tsc --noEmit
 npm run build
 ```
 
-All 168 tests must pass and the build must succeed. If anything fails, stop and
+All 174 tests must pass and the build must succeed. If anything fails, stop and
 fix it — a broken build on `main` means production keeps serving the old
 deployment while the repo silently diverges from it.
+
+### 3. Scheduled jobs
+
+If the change touched [`vercel.json`](../../../vercel.json) or
+`src/app/api/cron/`, confirm the cron still runs after deploying — see
+[docs/operations.md](../../../docs/operations.md). A silently stopped keepalive
+does not surface until Supabase's pause warning arrives.
 
 ## Schema first
 

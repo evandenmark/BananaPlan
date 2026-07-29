@@ -71,12 +71,17 @@ migration files; changes are applied with `drizzle-kit push`
    npm run test:run
    ```
 
-7. **Refresh the data snapshot** if the change affects existing rows, so the
-   backup does not drift ([ADR 0007](../../../docs/decisions/0007-seed-data-as-backup.md)):
+7. **Refresh `seed-data.sql`** only if the change makes the fixture no longer
+   load — a new `NOT NULL` column without a default, say. It is a small
+   local-seeding fixture, **not the backup**; production backups are automatic
+   ([ADR 0011](../../../docs/decisions/0011-automated-production-backups.md)).
 
    ```bash
    pg_dump bananaplan --data-only --column-inserts > seed-data.sql
    ```
+
+   This repo is **public**. Check the result before committing: it must contain
+   no `clients` or `orders` rows, since those carry real names.
 
 8. **Push to production**, only after local is green:
 

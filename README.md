@@ -18,7 +18,7 @@ Needs `DATABASE_URL` in `.env` pointing at a local `bananaplan` database.
 | Command | |
 | --- | --- |
 | `npm run dev` | dev server |
-| `npm run test:run` | tests once (168 tests, ~2s) |
+| `npm run test:run` | tests once (174 tests, ~2s) |
 | `npm test` | tests in watch mode |
 | `npm run build` | production build |
 | `npx drizzle-kit push` | apply `src/db/schema.ts` to the database |
@@ -52,5 +52,5 @@ src/lib/forecast.ts     the forecasting math
 src/app/actions/        server actions, one file per entity
 src/app/<entity>/       list / new / [id]/edit pages
 src/components/nav.tsx  bottom navigation
-seed-data.sql           committed data snapshot; also the backup
+seed-data.sql           small fixture for seeding a local database
 ```

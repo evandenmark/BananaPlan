@@ -4,6 +4,15 @@
 - **Date:** 2026-07-28 *(recorded retroactively; decision made 2026-02)*
 - **Affects:** `src/app/**`, `src/app/actions/*`
 
+> **Scope clarification, 2026-07-28.** "No API routes" governs how **the app
+> moves its own data** — no route handler should exist so that a page or form can
+> read or write the database. It does not cover endpoints that exist for an
+> external scheduler to call, which have no Server Action equivalent because
+> there is no user and no form. `src/app/api/cron/keepalive/route.ts` is such an
+> endpoint and is deliberately consistent with this ADR, not an exception to it;
+> see [0010](0010-database-keepalive.md). Any route handler that serves the app's
+> own pages still needs a new decision.
+
 ## Context
 
 BananaPlan is a single-operator app talking to one Postgres database. Next.js 16
