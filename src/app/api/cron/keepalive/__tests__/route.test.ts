@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { db } from "@/db";
-import { fieldInventory } from "@/db/schema";
+import { fieldInventory, sites, varieties } from "@/db/schema";
 import { GET } from "../route";
 
 vi.mock("@/db", () => ({ db: { select: vi.fn() } }));
@@ -11,7 +11,7 @@ const originalSecret = process.env.CRON_SECRET;
 beforeEach(() => {
   vi.resetAllMocks();
   delete process.env.CRON_SECRET;
-  mockFrom = vi.fn().mockResolvedValue([{ plantings: 8 }]);
+  mockFrom = vi.fn().mockResolvedValue([{ n: 8 }]);
   vi.mocked(db.select).mockReturnValue({ from: mockFrom } as never);
 });
 
@@ -24,16 +24,21 @@ const req = (headers: Record<string, string> = {}) =>
   new Request("https://bananaplan.vercel.app/api/cron/keepalive", { headers });
 
 describe("keepalive cron route", () => {
-  it("queries a real table so the ping counts as database activity", async () => {
+  it("issues a separate round trip per table, so the ping is several requests", async () => {
     await GET(req());
-    expect(db.select).toHaveBeenCalled();
+    expect(db.select).toHaveBeenCalledTimes(3);
+    expect(mockFrom).toHaveBeenCalledWith(sites);
+    expect(mockFrom).toHaveBeenCalledWith(varieties);
     expect(mockFrom).toHaveBeenCalledWith(fieldInventory);
   });
 
-  it("reports ok with the row count", async () => {
+  it("reports ok with a count per probed table", async () => {
     const res = await GET(req());
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toMatchObject({ ok: true, plantings: 8 });
+    await expect(res.json()).resolves.toMatchObject({
+      ok: true,
+      counts: { sites: 8, varieties: 8, plantings: 8 },
+    });
   });
 
   it("rejects an unauthorized caller when CRON_SECRET is set", async () => {

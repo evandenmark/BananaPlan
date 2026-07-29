@@ -28,7 +28,7 @@ endpoint checks it.
 
 | Job | Runs on | Schedule | Defined in |
 | --- | --- | --- | --- |
-| Database keepalive | Vercel Cron | daily, 14:00 UTC (04:00 HST) | [`vercel.json`](../vercel.json) → [`/api/cron/keepalive`](../src/app/api/cron/keepalive/route.ts) |
+| Database keepalive | Vercel Cron | twice daily, 02:00 and 14:00 UTC (16:00 and 04:00 HST) | [`vercel.json`](../vercel.json) → [`/api/cron/keepalive`](../src/app/api/cron/keepalive/route.ts) |
 | Production backup | GitHub Actions | daily, 11:00 UTC (01:00 HST) | [`bananaplan-backups`](https://github.com/evandenmark/bananaplan-backups) (private) |
 
 They are offset by three hours on purpose, and they run on different services, so
@@ -51,9 +51,25 @@ deletes them 90 days after pausing. Their guidance is "a few user requests to th
 database each day," so this runs **daily** — a 72-hour interval would leave four
 days of a 7-day window with no activity.
 
-The endpoint runs a `count(*)` read. A query is activity; there is no heartbeat
-table and there should not be one — see
+The endpoint runs three `count(*)` reads — `sites`, `varieties`,
+`field_inventory` — one at a time, so each is its own round trip. Queries are
+activity; there is no heartbeat table and there should not be one. See
 [ADR 0010](decisions/0010-database-keepalive.md).
+
+Between the two daily runs and the backup job's connection at 11:00 UTC, the
+database is touched at **three distinct hours a day**.
+
+### Do not add sleeps to spread the reads out
+
+Tempting, and wrong. Vercel bills wall-clock execution, so a sleeping function
+burns quota doing nothing — and sleeping past `maxDuration` kills the invocation,
+turning a healthy ping into a **failed** cron run.
+
+It also does not help. Supabase's heuristic is measured per day over a 7-day
+window, so reads a minute apart look identical to a single read. Spacing that
+counts comes from **more invocations at different hours** — which is what the two
+`crons` entries do, at no runtime cost. If you want more, add another entry;
+don't make one invocation last longer.
 
 ### How it actually triggers
 
@@ -70,6 +86,12 @@ Three consequences worth internalising:
 - Crons run on **production** deployments only, never previews.
 - Confirm it in the Vercel dashboard under the project's **Cron Jobs** tab. If
   that tab is empty, the deployment being served has no `vercel.json`.
+
+**Plan limits are unverified.** Vercel's public docs do not state a per-plan cap
+on cron count or frequency in a form worth quoting here, and the current plan is
+Hobby. Two daily entries is deliberately conservative. After deploying, check the
+Cron Jobs tab actually lists **both** schedules — if only one appears, the plan
+caps them, and that is the real limit rather than anything written here.
 
 **Setup:** set `CRON_SECRET` in Vercel's environment variables to any random
 string. Vercel sends it automatically as a bearer token, and the endpoint

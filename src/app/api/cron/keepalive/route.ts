@@ -1,8 +1,15 @@
 import { db } from "@/db";
-import { fieldInventory } from "@/db/schema";
+import { fieldInventory, sites, varieties } from "@/db/schema";
 import { sql } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
+
+/** Queried one at a time, so each is a separate round trip to Postgres. */
+const PROBES = [
+  { name: "sites", table: sites },
+  { name: "varieties", table: varieties },
+  { name: "plantings", table: fieldInventory },
+] as const;
 
 /**
  * Keeps the Supabase project out of free-tier hibernation.
@@ -23,13 +30,26 @@ export async function GET(request: Request) {
   }
 
   try {
-    const [row] = await db
-      .select({ plantings: sql<number>`count(*)::int` })
-      .from(fieldInventory);
+    // Several small queries rather than one, because Supabase's guidance is "a
+    // few user requests to the database each day". Sequential on purpose: each
+    // is its own round trip, and the whole thing is still milliseconds.
+    //
+    // Deliberately no sleeping between them. Vercel bills wall-clock execution
+    // and would kill the function at maxDuration — turning a healthy ping into
+    // a failed cron run. Spacing that matters comes from running this at
+    // several hours of the day (see vercel.json), not from pauses inside one
+    // invocation.
+    const counts: Record<string, number> = {};
+    for (const probe of PROBES) {
+      const [row] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(probe.table);
+      counts[probe.name] = row.n;
+    }
 
     return Response.json({
       ok: true,
-      plantings: row.plantings,
+      counts,
       at: new Date().toISOString(),
     });
   } catch (error) {

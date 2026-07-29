@@ -37,8 +37,19 @@ not have to re-derive this.
 - Vercel runs it in the cloud, on the deployment that is already there. Nothing
   local is involved, and it keeps working during months of not touching the
   project — the exact scenario that caused the outage.
-- The handler runs a **read** (`count(*)` over `field_inventory`). A query is
+- It runs **twice a day**, at 02:00 and 14:00 UTC. Supabase's guidance is "a few
+  user requests," so spread across hours is worth having, and extra invocations
+  of a millisecond-scale read cost nothing.
+- The handler runs **three reads** — `count(*)` over `sites`, `varieties`, and
+  `field_inventory` — sequentially, so each is its own round trip. Queries are
   activity; nothing needs to be written.
+- **The handler never sleeps between reads.** Vercel bills wall-clock execution
+  time, so a sleeping function burns quota doing nothing, and sleeping past
+  `maxDuration` kills the invocation — converting a healthy ping into a *failed*
+  cron run, which is worse than a single clean read. Sleeping also buys nothing
+  against the actual metric: reads a minute apart are indistinguishable from one
+  read to a heuristic measured per day over a 7-day window. Spacing that matters
+  comes from more invocations at different hours, not pauses inside one.
 - **There is deliberately no heartbeat table.** A row per day grows without
   bound, needs pruning, and puts a fake entity in a schema that otherwise
   describes only real farm concepts. The observability a heartbeat table would
@@ -75,6 +86,11 @@ so the two jobs are mutual backstops.
 - **A `dummy_ping` table written to on each run** — rejected. It grows forever,
   needs pruning, pollutes the schema, and buys observability that Vercel's cron
   history already provides.
+- **One invocation that reads, sleeps a minute, reads again** — rejected for the
+  reasons in the decision above: it costs billable time, risks a `maxDuration`
+  timeout that would be logged as a failure, and a minute of spacing is noise
+  against a metric measured per day. Two invocations twelve hours apart, each
+  doing a few reads, is strictly better and cheaper.
 - **GitHub Actions for the keepalive too** — workable, but GitHub disables
   scheduled workflows after 60 days of repository inactivity, and long quiet
   periods are exactly when this job matters most. Vercel crons have no such rule.
