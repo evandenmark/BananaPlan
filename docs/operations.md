@@ -140,13 +140,23 @@ own step.
 **A dump that succeeds but cannot be restored.** Without `-n public`, `pg_dump`
 also captures Supabase's managed schemas — `auth`, `storage`, `realtime`,
 `vault`, `pgbouncer`, `graphql` — and their internal migration bookkeeping.
-Restoring that into a fresh project fights the platform's own provisioning. It
-also inflated the schema dump from 12 KB to 156 KB, which is the visible tell.
-The workflow now fails if any managed schema reappears.
+Restoring that into a fresh project fights the platform's own provisioning. The
+workflow now fails if any managed schema reappears.
 
-A correct dump is roughly **7 KB of data and 12 KB of schema**, contains only
-`public`, and includes `setval` calls so sequences restore and later inserts do
-not collide. If the sizes jump by an order of magnitude, suspect `-n public`.
+To check a dump by hand, look at **which schemas it contains**, not how big it
+is. The data dump grows with real farm records, so size tells you nothing:
+
+```bash
+grep -oE "CREATE TABLE [a-z_]+\." dumps/production-schema.sql | sort -u
+grep -oE "INSERT INTO [a-z_]+\."  dumps/production-data.sql   | sort -u
+```
+
+Both should print `public.` and nothing else. A healthy dump also contains
+`setval` calls, so sequences restore and later inserts do not collide:
+
+```bash
+grep -c setval dumps/production-data.sql   # one per table with a serial id
+```
 
 ## Committed is not deployed
 

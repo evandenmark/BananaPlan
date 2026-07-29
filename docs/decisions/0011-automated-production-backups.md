@@ -82,8 +82,9 @@ names.
   managed schemas — `auth`, `storage`, `realtime`, `vault`, `pgbouncer`,
   `graphql` — and their internal migration bookkeeping. Restoring that into a
   fresh project fights the platform's own provisioning, so the dump is not
-  actually restorable. It also inflated the schema dump from 12 KB to 156 KB.
-  The workflow now fails if a managed schema ever reappears.
+  actually restorable. The workflow now fails if a managed schema ever reappears.
+  Verify a dump by the schemas it contains, never by its size — the data dump
+  grows with real farm records, so size is not a health signal.
 
 ## Alternatives considered
 
@@ -100,6 +101,8 @@ names.
   private repo have neither problem.
 - **Object storage (S3, R2, Backblaze)** — the conventional answer, and better at
   scale. Rejected for now: it costs money or at least an account, where this is
-  free, and a 7 KB dump does not need object storage.
+  free, and a text dump of one farm's records is small enough that git handles it
+  comfortably. Revisit if the dump ever grows enough that committing it daily
+  bloats the repo — years of farm records, not months.
 - **Supabase Pro with PITR** — the real answer if this data ever becomes hard to
   reconstruct. A cost decision for the owner.
