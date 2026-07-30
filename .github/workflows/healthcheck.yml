@@ -1,0 +1,91 @@
+name: Production health check
+
+# Runs on GitHub, deliberately NOT on Vercel. A monitor hosted on the thing it
+# monitors cannot report that thing being down — it just stops running, and
+# silence looks identical to health.
+#
+# The alert is GitHub's own "workflow failed" email to the repo owner. No new
+# service, no account, nothing to pay for.
+#
+# What this does NOT cover:
+#   - Whether a Vercel cron is actually registered. Nothing reachable over HTTP
+#     reveals that; only the dashboard's Cron Jobs tab does. Supabase's pause
+#     warning email is the real backstop there.
+#   - Itself. GitHub disables scheduled workflows after 60 days of repository
+#     inactivity, and a disabled monitor is silent, not red.
+
+on:
+  schedule:
+    - cron: "0 */3 * * *" # every 3 hours
+  workflow_dispatch:
+
+concurrency:
+  group: healthcheck
+  # Never cancel a run in flight: a cancelled run is not a failed run and sends
+  # no email, so cancelling could swallow the one alert that mattered.
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check production
+        run: |
+          BASE=https://bananaplan.vercel.app
+
+          # One transient blip must not send mail. A check that cries wolf gets
+          # filtered, and then the real outage goes unread. Three tries, backing
+          # off, before anything is called a failure.
+          probe() {
+            local path="$1" want="$2" code=
+            for attempt in 1 2 3; do
+              # curl already prints 000 via -w when it cannot connect, so `|| true`
+              # rather than `|| echo 000` — the latter concatenates and reports a
+              # nonsensical "000000" in the alert.
+              code=$(curl -s -o /dev/null -w "%{http_code}" \
+                       --max-time 20 "$BASE$path" || true)
+              code=${code:-000}
+              [ "$code" = "$want" ] && { echo "$code"; return 0; }
+              sleep $((attempt * 10))
+            done
+            echo "$code"
+            return 1
+          }
+
+          # /more is the only route with no database dependency, so comparing it
+          # against a DB-backed route says *which layer* broke — the same
+          # diagnostic docs/operations.md tells a human to run by hand.
+          more_code=$(probe /more 200)    && more_ok=1 || more_ok=0
+          fields_code=$(probe /fields 200) && fields_ok=1 || fields_ok=0
+
+          # 401 proves exactly two things: the route is deployed, and CRON_SECRET
+          # is set. It does NOT prove a cron is registered — the route is
+          # compiled from route.ts and exists regardless of what vercel.json
+          # says. Emptying the crons array leaves this returning 401 while
+          # nothing ever fires. Only the Vercel dashboard shows registration.
+          cron_code=$(probe /api/cron/keepalive 401) && cron_ok=1 || cron_ok=0
+
+          echo "/more=$more_code /fields=$fields_code /api/cron/keepalive=$cron_code"
+
+          failed=0
+
+          if [ "$more_ok" = 0 ] && [ "$fields_ok" = 0 ]; then
+            echo "::error::Whole site is down (/more=$more_code, /fields=$fields_code). Suspect Vercel or the app, not the database — /more needs no database. Check https://vercel.com/evanlewisdenmark-gmailcoms-projects/banana_plan and mcp__vercel__get_runtime_errors."
+            failed=1
+          elif [ "$fields_ok" = 0 ]; then
+            echo "::error::Database is down. /more renders ($more_code) but /fields does not ($fields_code), and /more is the only route with no database dependency. Suspect Supabase: paused by the free-tier 7-day rule, deleted, or bad credentials. See docs/operations.md and the db-ops skill."
+            failed=1
+          elif [ "$more_ok" = 0 ]; then
+            echo "::error::/more is failing ($more_code) while /fields works. Odd — the database is clearly fine, so this is app or routing."
+            failed=1
+          fi
+
+          case "$cron_code" in
+            401) ;;
+            404) echo "::error::/api/cron/keepalive returns 404 — the route is not in the live deployment. Either main was not pushed, the route file was deleted, or the build dropped it. The keepalive cron will be firing at a URL that does not exist."; failed=1 ;;
+            200) echo "::error::/api/cron/keepalive returns 200 without a token — CRON_SECRET is missing from Vercel's environment. The keepalive still runs, but the endpoint is publicly callable."; failed=1 ;;
+            *)   echo "::error::/api/cron/keepalive returned $cron_code, expected 401."; failed=1 ;;
+          esac
+
+          if [ "$failed" = 1 ]; then exit 1; fi
+          echo "All checks passed."

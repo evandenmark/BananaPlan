@@ -36,9 +36,8 @@ export async function GET(request: Request) {
     //
     // Deliberately no sleeping between them. Vercel bills wall-clock execution
     // and would kill the function at maxDuration — turning a healthy ping into
-    // a failed cron run. Spacing that matters comes from running this at
-    // several hours of the day (see vercel.json), not from pauses inside one
-    // invocation.
+    // a failed cron run. Spreading across hours would be the better lever, but
+    // the plan registers only one cron, so this one invocation carries it.
     const counts: Record<string, number> = {};
     for (const probe of PROBES) {
       const [row] = await db

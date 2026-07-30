@@ -14,11 +14,11 @@ owner must do them; an agent cannot.
 - [x] **Backup — done 2026-07-28.** `DIRECT_URL` is set as a repository secret
       and the workflow has run successfully; `dumps/` holds a real dump of all
       eight tables.
-- [ ] **Keepalive:** generate a secret with `openssl rand -hex 32`, set it as
-      `CRON_SECRET` in Vercel's environment variables (Production scope), then
-      **redeploy** — environment changes do not apply to existing deployments.
-      The cron works without this; the endpoint is just publicly callable until
-      then.
+- [x] **Keepalive — done 2026-07-28.** `CRON_SECRET` is set in Vercel and the
+      deployment is live; `/api/cron/keepalive` returns 401 without a token,
+      which is how you confirm it. (To reset it: `openssl rand -hex 32`, set it
+      in Vercel's environment variables at Production scope, then **redeploy** —
+      environment changes do not apply to existing deployments.)
 
 `CRON_SECRET` is a value you invent, not one you look up. Vercel sends it
 automatically as `Authorization: Bearer <value>` on cron invocations, and the
@@ -28,8 +28,9 @@ endpoint checks it.
 
 | Job | Runs on | Schedule | Defined in |
 | --- | --- | --- | --- |
-| Database keepalive | Vercel Cron | twice daily, 02:00 and 14:00 UTC (16:00 and 04:00 HST) | [`vercel.json`](../vercel.json) → [`/api/cron/keepalive`](../src/app/api/cron/keepalive/route.ts) |
+| Database keepalive | Vercel Cron | daily, 14:00 UTC (04:00 HST) | [`vercel.json`](../vercel.json) → [`/api/cron/keepalive`](../src/app/api/cron/keepalive/route.ts) |
 | Production backup | GitHub Actions | daily, 11:00 UTC (01:00 HST) | [`bananaplan-backups`](https://github.com/evandenmark/bananaplan-backups) (private) |
+| Health check | GitHub Actions | every 3 hours | [`.github/workflows/healthcheck.yml`](../.github/workflows/healthcheck.yml) |
 
 They are offset by three hours on purpose, and they run on different services, so
 each is a partial backstop for the other — the backup job's daily connection is
@@ -56,8 +57,19 @@ The endpoint runs three `count(*)` reads — `sites`, `varieties`,
 activity; there is no heartbeat table and there should not be one. See
 [ADR 0010](decisions/0010-database-keepalive.md).
 
-Between the two daily runs and the backup job's connection at 11:00 UTC, the
-database is touched at **three distinct hours a day**.
+The plan allows only one cron (see below), so this single daily run has to be
+sufficient **on its own**. That is why the endpoint does three reads per
+invocation rather than one.
+
+The backup job and the health check also touch the database daily, and in
+practice that is most of the activity. **Do not let that become the plan.** Both
+run on GitHub Actions, which disables scheduled workflows after 60 days of
+repository inactivity — and a long quiet stretch is exactly when the keepalive
+matters, so the two jobs most likely to be switched off are the ones that would
+be covering for it. The Vercel cron is the only keepalive that survives that
+scenario, which is the whole reason
+[ADR 0010](decisions/0010-database-keepalive.md) put it on Vercel. Treat the
+others as a bonus, never as the mechanism.
 
 ### Do not add sleeps to spread the reads out
 
@@ -66,10 +78,12 @@ burns quota doing nothing — and sleeping past `maxDuration` kills the invocati
 turning a healthy ping into a **failed** cron run.
 
 It also does not help. Supabase's heuristic is measured per day over a 7-day
-window, so reads a minute apart look identical to a single read. Spacing that
-counts comes from **more invocations at different hours** — which is what the two
-`crons` entries do, at no runtime cost. If you want more, add another entry;
-don't make one invocation last longer.
+window, so reads a minute apart look identical to a single read.
+
+Spacing would come from more invocations at different hours — but this plan
+registers only one cron (see below), so that lever is not available on Vercel.
+The answer is more reads per invocation, which is what the endpoint does. Do not
+make one invocation last longer.
 
 ### How it actually triggers
 
@@ -87,11 +101,15 @@ Three consequences worth internalising:
 - Confirm it in the Vercel dashboard under the project's **Cron Jobs** tab. If
   that tab is empty, the deployment being served has no `vercel.json`.
 
-**Plan limits are unverified.** Vercel's public docs do not state a per-plan cap
-on cron count or frequency in a form worth quoting here, and the current plan is
-Hobby. Two daily entries is deliberately conservative. After deploying, check the
-Cron Jobs tab actually lists **both** schedules — if only one appears, the plan
-caps them, and that is the real limit rather than anything written here.
+**One cron is all this plan gets.** Two entries were configured on 2026-07-28 —
+02:00 and 14:00 UTC — and only the 14:00 one appeared in the dashboard. Vercel's
+docs do not state the cap, but the dashboard is the authority: whatever it lists
+is what will actually fire. Do not assume an added entry works because the deploy
+succeeded; extra entries are dropped silently, not rejected.
+
+This is why the endpoint does several reads per invocation, and why the health
+check below matters more than it first appears — it queries the database every
+3 hours and so carries most of the daily-activity load.
 
 **Setup:** set `CRON_SECRET` in Vercel's environment variables to any random
 string. Vercel sends it automatically as a bearer token, and the endpoint
@@ -136,7 +154,7 @@ The target is zero, and both jobs are built for it.
 
 **Vercel crons are not a billable product.** There is no per-cron charge; a cron
 invocation is an ordinary function invocation and draws on the same included
-allowance as any page request. Two per day is ~60 invocations a month, each a few
+allowance as any page request. One per day is ~30 invocations a month, each a few
 `count(*)` queries lasting milliseconds — far less than one person browsing the
 app for a minute. This is why the no-sleep rule matters: billing is by wall-clock
 execution, so a sleeping function is the one way to make a trivial job cost
@@ -156,6 +174,48 @@ Two things that would actually cost money, neither currently in play:
 
 Exact allowances change, so do not trust numbers written here over the source:
 `vercel usage`, or the dashboard's Usage tab.
+
+## Health check
+
+Runs on GitHub Actions, in this repo, every 3 hours —
+[`.github/workflows/healthcheck.yml`](../.github/workflows/healthcheck.yml).
+
+**It runs on GitHub and not on Vercel on purpose.** A monitor hosted on the thing
+it monitors cannot report that thing being down; it simply stops running, and
+silence is indistinguishable from health. The keepalive cron has exactly this
+blind spot, which is what this check covers.
+
+It probes three URLs and, crucially, **interprets the combination** rather than
+just reporting codes:
+
+| `/more` | `/fields` | Means |
+| --- | --- | --- |
+| fail | fail | Vercel or the app — `/more` needs no database |
+| ok | fail | **The database.** Supabase paused, deleted, or bad credentials |
+| fail | ok | App or routing; the database is clearly fine |
+
+That is the same diagnostic this page tells a human to run by hand, encoded so the
+failure email already says which layer broke.
+
+It also checks `/api/cron/keepalive` returns **401**, which catches two silent
+regressions the other jobs cannot: a **404** means the live deployment has no
+`vercel.json`, so no keepalive cron is registered and the database will
+eventually pause; a **200** means `CRON_SECRET` was dropped from Vercel and the
+endpoint is publicly callable.
+
+**Alerting** is GitHub's built-in "workflow failed" email to the repo owner — no
+new service, no account, nothing to pay for. Every probe retries three times with
+backoff first, so one transient blip does not send mail. That restraint is the
+point: a check that cries wolf gets filtered, and then the real outage goes
+unread.
+
+**Cost is zero.** This repo is public, and public repos get unlimited free Actions
+minutes. It also needs no secrets, since it only fetches public URLs — which is
+why it lives here rather than in the private backup repo.
+
+If you ever want SMS or push instead of email, an external uptime service
+(UptimeRobot's free tier, Better Stack) hitting the same URLs would do it. That
+is a new account to manage, which is the only reason it is not the default here.
 
 ## Driving the jobs from the CLI
 
