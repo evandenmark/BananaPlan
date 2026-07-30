@@ -127,17 +127,22 @@ Three consequences worth internalising:
 - Confirm it in the Vercel dashboard under the project's **Cron Jobs** tab. If
   that tab is empty, the deployment being served has no `vercel.json`.
 
-### Registered is not the same as fired
+### Confirming a run: the dashboard, not the logs
 
-The Cron Jobs tab showing the job means Vercel **accepted the schedule**. It does
-not mean the job has ever run. The proof of an actual run is a **`200` on
-`/api/cron/keepalive`** in the runtime logs:
+**The Cron Jobs tab's run history is the authority.** On the Hobby plan, runtime
+logs are retained for a very short window — querying more than a couple of hours
+back returns `ExceedsBillingLimitError`, so an absent log line says nothing about
+whether the job ran.
 
-```
-mcp__vercel__get_runtime_logs  query="keepalive"  since="24h"
-```
+This caused a wrong conclusion on 2026-07-30: the keepalive was reported as
+"never fired" because no `200` appeared in a log query, when in fact it had run
+at 14:00 UTC the previous day. The deployment timestamp settled it in one step —
+the route went live at 09:36 UTC, so the 14:00 slot that same day was its first
+run. **Check when the feature deployed before concluding a scheduled job has not
+run.**
 
-Reading those logs correctly matters, and is easy to get wrong:
+If a run *is* inside the retained window, its log signature is distinctive, and
+reading it correctly matters:
 
 | What you see | What it is |
 | --- | --- |
@@ -148,6 +153,9 @@ Reading those logs correctly matters, and is easy to get wrong:
 That last row caused a misread on 2026-07-30: a sweep that happened to include
 `/api/cron/keepalive` looked like a cron firing until the neighbouring log lines
 showed `/weight-log` and `/forecast` hit in the same second.
+
+**Status of the keepalive:** confirmed firing. First run 2026-07-29 14:00 UTC,
+visible in the Cron Jobs run history.
 
 To test the handler itself without waiting for the schedule:
 
