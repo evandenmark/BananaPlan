@@ -127,6 +127,37 @@ Three consequences worth internalising:
 - Confirm it in the Vercel dashboard under the project's **Cron Jobs** tab. If
   that tab is empty, the deployment being served has no `vercel.json`.
 
+### Registered is not the same as fired
+
+The Cron Jobs tab showing the job means Vercel **accepted the schedule**. It does
+not mean the job has ever run. The proof of an actual run is a **`200` on
+`/api/cron/keepalive`** in the runtime logs:
+
+```
+mcp__vercel__get_runtime_logs  query="keepalive"  since="24h"
+```
+
+Reading those logs correctly matters, and is easy to get wrong:
+
+| What you see | What it is |
+| --- | --- |
+| `200`, no `branch=` metadata | **A real cron run.** Invoked internally by Vercel's scheduler. |
+| `401`, `branch=main cache=MISS` | An external probe without the secret — the health check, or a curl. |
+| `0`, no metadata, **several different routes within a few seconds** | A crawler or prewarm sweeping the site. Not a cron — a cron only ever hits its one configured path. |
+
+That last row caused a misread on 2026-07-30: a sweep that happened to include
+`/api/cron/keepalive` looked like a cron firing until the neighbouring log lines
+showed `/weight-log` and `/forecast` hit in the same second.
+
+To test the handler itself without waiting for the schedule:
+
+```bash
+curl -s -H "Authorization: Bearer $CRON_SECRET" https://bananaplan.vercel.app/api/cron/keepalive
+```
+
+A healthy response is `{"ok":true,"counts":{...},"at":"..."}`. That proves
+everything except the scheduler pulling the trigger.
+
 **One cron is all this plan gets.** Two entries were configured on 2026-07-28 —
 02:00 and 14:00 UTC — and only the 14:00 one appeared in the dashboard. Vercel's
 docs do not state the cap, but the dashboard is the authority: whatever it lists
