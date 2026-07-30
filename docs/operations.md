@@ -166,10 +166,50 @@ confirm it works rather than waiting a day to find out.
 
 ### Restoring — the actual procedure
 
-**Last verified end to end on 2026-07-29** by restoring the real production dumps
-into a scratch local database. Row counts matched, sequences landed correctly,
-and foreign keys held. Re-verify occasionally; a restore that has never been run
-is a hypothesis, not a backup.
+**Last verified 2026-07-29** by a full simulation against scratch databases: an
+empty-project restore, a data-loss restore, a point-in-time restore from git
+history, and foreign-key/sequence checks. Re-run it occasionally; a restore that
+has never been run is a hypothesis, not a backup.
+
+#### First: which situation are you in?
+
+The two cases need **different commands**, and using the wrong one silently
+recovers nothing.
+
+| Situation | Use |
+| --- | --- |
+| Project deleted or database empty | **A — fresh restore** below |
+| Database still exists, data wrong or missing | **B — wipe first**, below |
+
+Case B is the more likely disaster and the one that traps people. Running the
+fresh-restore commands against a surviving database **does not work**: the schema
+dump aborts on `type "frequency" already exists`, and the data dump aborts on
+`duplicate key value violates unique constraint "sites_pkey"`. Verified — both
+exit non-zero and nothing is recovered. You must clear the existing data first.
+
+#### B — database survives, data must be replaced
+
+Least destructive: truncate the app tables and reload data only. The schema is
+already correct, so no DDL is involved.
+
+```bash
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -c "
+TRUNCATE bunch_harvests, weight_harvests, field_inventory,
+         orders, clients, fields, varieties, sites RESTART IDENTITY CASCADE;"
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f bananaplan-backups/dumps/production-data.sql
+```
+
+If the **schema** is also damaged, wipe and do a full restore instead — this
+works on Supabase:
+
+```bash
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+```
+
+then continue with case A below. Both paths were verified to recover full row
+counts with sequences landing past existing ids.
+
+#### A — fresh restore into an empty database
 
 Two commands, schema then data:
 
@@ -179,7 +219,9 @@ psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f bananaplan-backups/dumps/production-sch
 psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f bananaplan-backups/dumps/production-data.sql
 ```
 
-Then verify — do not assume exit 0 means the data arrived:
+#### Verify, whichever path you took
+
+Do not assume exit 0 means the data arrived:
 
 ```bash
 psql "$DIRECT_URL" -tAc "select 'sites='||(select count(*) from sites)
@@ -190,17 +232,34 @@ psql "$DIRECT_URL" -tAc "select 'sites='||(select count(*) from sites)
   ||' weight='||(select count(*) from weight_harvests)"
 ```
 
+Check foreign keys survived, since a partial restore can leave orphans that only
+surface as a broken forecast:
+
+```bash
+psql "$DIRECT_URL" -tAc "select
+  (select count(*) from field_inventory fi left join fields f on f.id=fi.field_id where f.id is null) +
+  (select count(*) from bunch_harvests b left join fields f on f.id=b.field_id where f.id is null) +
+  (select count(*) from fields f left join sites s on s.id=f.site_id where s.id is null)"
+```
+
+Zero is the only acceptable answer.
+
 Finally, **check through `DATABASE_URL`** (transaction pooler, 6543) rather than
 `DIRECT_URL` — that is the path production actually uses, and the two poolers
 fail independently. Loading `/fields` in a browser is the honest end-to-end test.
 
-**To restore an earlier day**, check it out first — git history is the retention:
+#### Restoring an earlier day
+
+Git history is the retention, so any day the job ran is recoverable:
 
 ```bash
 cd bananaplan-backups
-git log --oneline dumps/production-data.sql
+git log --oneline --date=format:"%Y-%m-%d %H:%M" --format="%h %ad %s" -- dumps/
 git checkout <sha> -- dumps/
 ```
+
+Then restore as above, and `git checkout main -- dumps/` afterwards to put the
+working tree back. Verified against a real earlier commit.
 
 **If the schema dump is unavailable**, `npx drizzle-kit push --force` recreates
 structure from `src/db/schema.ts` instead, then load the data dump on top.
