@@ -28,6 +28,7 @@ half-right.
 | `crud-entity` | Adding a new managed entity (list + new + edit pages, actions, tests) |
 | `forecast-change` | Touching `src/lib/forecast.ts` or anything that changes projected harvests |
 | `db-ops` | Inspecting, seeding, or restoring the local or production database |
+| `disaster-drill` | Proving the backups can actually be restored (`./scripts/disaster-drill.sh`) |
 | `ship` | Committing and deploying to production, and verifying the deploy |
 | `log-decision` | A non-obvious choice was made and should be recorded as an ADR |
 

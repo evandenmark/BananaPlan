@@ -83,7 +83,18 @@ migration files; changes are applied with `drizzle-kit push`
    This repo is **public**. Check the result before committing: it must contain
    no `clients` or `orders` rows, since those carry real names.
 
-8. **Push to production**, only after local is green:
+8. **Re-run the disaster drill** if you added or removed a table. The drill
+   asserts a specific table count and truncates a specific list, both of which go
+   stale — and a backup that cannot be restored is worth knowing about now rather
+   than during an outage. Update the counts in `scripts/disaster-drill.sh`, then:
+
+   ```bash
+   ./scripts/disaster-drill.sh
+   ```
+
+   See the [`disaster-drill`](../disaster-drill/SKILL.md) skill.
+
+9. **Push to production**, only after local is green:
 
    ```bash
    npx drizzle-kit push --force
@@ -96,7 +107,7 @@ migration files; changes are applied with `drizzle-kit push`
    Then verify through `DATABASE_URL`, the path production actually uses, with
    `mcp__supabase__list_tables`.
 
-9. **Deploy the code** that depends on the new schema — see the `ship` skill.
+10. **Deploy the code** that depends on the new schema — see the `ship` skill.
    Order matters: schema first, then code. Code deployed against a schema that
    lacks its columns 500s on every affected page.
 

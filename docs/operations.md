@@ -166,10 +166,23 @@ confirm it works rather than waiting a day to find out.
 
 ### Restoring — the actual procedure
 
-**Last verified 2026-07-29** by a full simulation against scratch databases: an
-empty-project restore, a data-loss restore, a point-in-time restore from git
-history, and foreign-key/sequence checks. Re-run it occasionally; a restore that
-has never been run is a hypothesis, not a backup.
+**Last verified: 2026-07-29** — 17 checks, 0 failures.
+
+Re-verify by running the drill, which does all of this automatically against
+throwaway local databases in about a minute:
+
+```bash
+./scripts/disaster-drill.sh
+```
+
+It cannot touch production or your working database, and it exits non-zero if any
+check fails. Update the date above when you run it. See the
+[`disaster-drill`](../.claude/skills/disaster-drill/SKILL.md) skill for what each
+failure means and when to run it.
+
+**A failing drill means you do not currently have working backups** — that is
+production-severity, not a flaky test. A restore that has never been run is a
+hypothesis, not a backup.
 
 #### First: which situation are you in?
 
