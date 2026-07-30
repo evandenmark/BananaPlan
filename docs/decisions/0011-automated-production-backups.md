@@ -71,7 +71,18 @@ names.
 - **Cost:** the restore path is now documented in two places (this repo's
   `db-ops` skill and the backup repo's README). They must not drift.
 
-### Two things learned bringing it up, worth not rediscovering
+### Three things learned bringing it up, worth not rediscovering
+
+- **A dump is not a backup until a restore has been run.** The first dumps were
+  verified as "correct-looking" — right tables, right row counts, `setval` present
+  — and were still **not restorable**. Two preamble lines aborted `psql -v
+  ON_ERROR_STOP=1` before a single row loaded: `SET transaction_timeout`
+  (Postgres 17 only, fails on the 16 that local development runs) and
+  `CREATE SCHEMA public` (every fresh database already has one, **including a new
+  Supabase project** — so this broke the real recovery path, not just local
+  restores). Both are now stripped at dump time and guarded in the verify step.
+  An actual restore into a scratch database on 2026-07-29 confirmed matching row
+  counts, correct sequences, and intact foreign keys.
 
 - **`pg_dump` must be version 17+, and installing the package is not enough.**
   Supabase runs Postgres 17.6; the GitHub runner ships 16, and `pg_dump` refuses

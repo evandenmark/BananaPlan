@@ -6,6 +6,29 @@ Everything that runs on a schedule, where it runs, and what to do when it stops.
 2026 outage happened during a five-month gap in work, which is exactly when a
 locally scheduled job would also have been off.
 
+## In one page
+
+Three jobs, three different jobs to do. They are on two different providers on
+purpose, so no single outage takes out both the thing and its monitor.
+
+| | Keeps it **alive** | Tells you it **broke** | Gets it **back** |
+| --- | --- | --- | --- |
+| Job | Keepalive cron | Health check | Backup |
+| Runs on | Vercel | GitHub Actions | GitHub Actions |
+| How often | daily, 14:00 UTC | every 3 hours | daily, 11:00 UTC |
+| Guards against | Supabase's 7-day inactivity pause | site or database down, silently | data loss |
+| You find out via | nothing — silent by design | failure email from GitHub | — |
+
+Read that middle column carefully: **the keepalive has no alarm of its own.** If
+it stops firing, nothing says so — the first signal is Supabase's pause-warning
+email, roughly a week before the project pauses. Do not filter that email. The
+health check covers the *consequence* (a paused database makes `/fields` fail),
+not the *cause*, and nothing reachable over HTTP can tell you whether a Vercel
+cron is still registered — only the dashboard's Cron Jobs tab shows that.
+
+The single most useful habit: if `/more` renders but other pages 500, it is the
+database, not the code.
+
 ## ⚠️ Activation checklist — both jobs need one manual step
 
 Neither job is fully live until these are done. They involve credentials, so the
@@ -141,7 +164,59 @@ is a recoverable commit.
 the backup repo, then trigger the workflow by hand from the Actions tab to
 confirm it works rather than waiting a day to find out.
 
-**Restoring:** see the `db-ops` skill, or the backup repo's README.
+### Restoring — the actual procedure
+
+**Last verified end to end on 2026-07-29** by restoring the real production dumps
+into a scratch local database. Row counts matched, sequences landed correctly,
+and foreign keys held. Re-verify occasionally; a restore that has never been run
+is a hypothesis, not a backup.
+
+Two commands, schema then data:
+
+```bash
+gh repo clone evandenmark/bananaplan-backups
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f bananaplan-backups/dumps/production-schema.sql
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f bananaplan-backups/dumps/production-data.sql
+```
+
+Then verify — do not assume exit 0 means the data arrived:
+
+```bash
+psql "$DIRECT_URL" -tAc "select 'sites='||(select count(*) from sites)
+  ||' fields='||(select count(*) from fields)
+  ||' varieties='||(select count(*) from varieties)
+  ||' plantings='||(select count(*) from field_inventory)
+  ||' bunch='||(select count(*) from bunch_harvests)
+  ||' weight='||(select count(*) from weight_harvests)"
+```
+
+Finally, **check through `DATABASE_URL`** (transaction pooler, 6543) rather than
+`DIRECT_URL` — that is the path production actually uses, and the two poolers
+fail independently. Loading `/fields` in a browser is the honest end-to-end test.
+
+**To restore an earlier day**, check it out first — git history is the retention:
+
+```bash
+cd bananaplan-backups
+git log --oneline dumps/production-data.sql
+git checkout <sha> -- dumps/
+```
+
+**If the schema dump is unavailable**, `npx drizzle-kit push --force` recreates
+structure from `src/db/schema.ts` instead, then load the data dump on top.
+
+**If you hit `ERROR: unrecognized configuration parameter "transaction_timeout"`
+or `schema "public" already exists`**, you are restoring a dump from before
+2026-07-29. Those two preamble lines abort the restore under `ON_ERROR_STOP`;
+strip them and retry:
+
+```bash
+grep -vE '^SET transaction_timeout|^CREATE SCHEMA public;$' old-dump.sql \
+  | psql "$DIRECT_URL" -v ON_ERROR_STOP=1
+```
+
+Newer dumps have them stripped at dump time, and the backup job now fails if they
+reappear.
 
 **Do not refresh `seed-data.sql` from production.** That instruction came from
 [ADR 0007](decisions/0007-seed-data-as-backup.md) and is withdrawn: the app repo
