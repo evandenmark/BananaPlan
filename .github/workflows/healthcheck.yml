@@ -121,6 +121,8 @@ jobs:
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
+          # No checkout step, so gh has no git remote to infer the repo from.
+          GH_REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           # One issue per outage, not one per run — this fires every 3 hours.
@@ -151,6 +153,7 @@ jobs:
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           for n in $(gh issue list --label outage --state open --json number -q '.[].number'); do
             gh issue close "$n" --comment "Recovered — health check passed at $(date -u '+%Y-%m-%d %H:%M UTC')."
