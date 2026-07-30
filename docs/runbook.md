@@ -166,20 +166,48 @@ test.
 
 ## 4. How you find out something broke
 
-| Failure | How you learn | Reliability |
+**The one command that always works**, regardless of any notification setting:
+
+```bash
+gh issue list --repo evandenmark/BananaPlan --label outage --state open
+```
+
+Empty means healthy. Anything listed is a live problem — the issue closes itself
+when a later run passes, so an open one is never stale. Closed ones are a
+readable outage history.
+
+| Failure | How you learn | Status |
 | --- | --- | --- |
-| Site or database down | Health check opens a GitHub **issue** labelled `outage`, within 3 hours | Verified — it correctly detected and classified a real outage on 2026-07-30 |
-| Backup job failing | Same issue mechanism does **not** cover it — check the Actions tab | Manual |
-| Keepalive stopped | Nothing, until Supabase's pause-warning email ~1 week ahead | Weak — see §3b |
-| Database paused | Health check (as "database down") | Verified |
+| Site or database down | Health check opens an `outage` issue, within 3 hours | **Verified** — detection, classification, issue creation and auto-close all exercised 2026-07-30 |
+| Backup job failing | Not covered — check the Actions tab | Manual |
+| Keepalive stopped | Nothing, until Supabase's pause warning ~1 week ahead | Weak, see §3b |
+| Database paused | Health check, as "database down" | **Verified** against a real outage |
 
-The issue closes itself when a later run passes, so **an open `outage` issue
-always means a live problem**, and closed ones are a readable history.
+### Push notification is NOT verified — check this once
 
-**Why an issue and not email:** on 2026-07-30 a genuinely failed run produced no
-notification record at all. Actions failure emails may still be sent — that
-channel is not inspectable from here — but an alert nobody can confirm is not an
-alert. The issue is visible, persistent, and checkable.
+Everything above is verified except whether a notification actually reaches you.
+
+On 2026-07-30, a genuinely failed run produced **no notification record at all**,
+which is why alerting moved off the workflow-failure email. The issue mechanism
+is strictly better because it leaves a record you can pull with the command
+above — but the issue is opened by `github-actions[bot]`, and GitHub only pushes
+that to you if you watch the repository.
+
+**Confirm it once:** open
+[github.com/evandenmark/BananaPlan](https://github.com/evandenmark/BananaPlan),
+set **Watch → All Activity**, then fire a test:
+
+```bash
+gh workflow run healthcheck.yml --repo evandenmark/BananaPlan -f simulate_failure=true
+```
+
+That opens a real outage issue without touching production. If a notification
+arrives, alerting is proven end to end; if not, you are relying on the pull check
+above and should consider an external uptime service. Run the workflow again
+normally afterwards to close the issue.
+
+Do not skip this because the plumbing "looks right". It looked right twice
+already and was silent both times.
 
 ### Gaps, stated plainly
 
