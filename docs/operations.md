@@ -166,7 +166,15 @@ confirm it works rather than waiting a day to find out.
 
 ### Restoring — the actual procedure
 
-**Last verified: 2026-07-29** — 17 checks, 0 failures.
+**Last verified: 2026-07-30 — against real production.** Not a simulation: the
+production schema was dropped (`DROP SCHEMA public CASCADE`, 8 tables to 0), the
+site was confirmed broken, the health check was confirmed to detect and correctly
+classify the outage, and production was restored from the backup taken four
+minutes earlier. Recovered state matched the pre-disaster baseline exactly, with
+zero foreign-key orphans and all sequences at or above their table's max id.
+Total outage: about four minutes.
+
+The local drill (`./scripts/disaster-drill.sh`, 17 checks) passed the same day.
 
 Re-verify by running the drill, which does all of this automatically against
 throwaway local databases in about a minute:

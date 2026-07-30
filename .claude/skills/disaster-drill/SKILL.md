@@ -93,6 +93,34 @@ It is read-only with respect to the backup repo — point-in-time uses
 **A failing drill means you do not currently have working backups.** Treat it as
 production-severity, not as a flaky test.
 
+## Drilling against real production
+
+The script never touches production, by design. A production drill has been run
+once, by hand, on 2026-07-30 — schema dropped and restored, about four minutes of
+downtime — and it validated the parts the local drill cannot: that the site fails
+in the predicted shape, and that the health check detects and correctly names the
+cause.
+
+If asked to do it again:
+
+1. **Take a fresh backup first and verify it has rows**, even though a recent one
+   exists. Trigger the workflow, wait for green, and count the `INSERT` lines.
+2. Record the pre-disaster baseline counts. You cannot prove recovery without
+   knowing what you started with.
+3. Confirm the site is healthy first, so a pre-existing failure is not mistaken
+   for one you caused.
+4. Then break it, observe, restore, and compare against the baseline.
+5. Verify sequences via `pg_sequences` rather than by inserting a test row —
+   production should not gain junk rows from a drill.
+
+**Get explicit confirmation from the owner before the destructive step**, every
+time. Destructive commands against production are also blocked by the permission
+classifier by default, which is correct; a chat message does not lift that, so
+the owner either grants the permission or runs that one command themselves.
+
+Do not do this on a whim. It is worth roughly annually, or after changing the
+restore procedure — the local drill covers the routine case.
+
 ## Extending it
 
 When you add a table, update two places in the script: the `counts()` function

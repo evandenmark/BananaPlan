@@ -73,6 +73,13 @@ names.
 
 ### Three things learned bringing it up, worth not rediscovering
 
+- **The whole chain was exercised against real production on 2026-07-30.** The
+  production schema was deliberately dropped and restored from a backup taken
+  minutes earlier. Everything held: the site failed in exactly the predicted
+  shape (`/more` 200, database-backed routes 500), the health check detected it
+  and named the database as the cause, and the restore returned matching row
+  counts, zero foreign-key orphans, and correct sequences. This is the only
+  evidence that actually counts — the rest is inference.
 - **A dump is not a backup until a restore has been run.** The first dumps were
   verified as "correct-looking" — right tables, right row counts, `setval` present
   — and were still **not restorable**. Two preamble lines aborted `psql -v
