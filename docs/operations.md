@@ -1,6 +1,9 @@
 # Operations
 
-Everything that runs on a schedule, where it runs, and what to do when it stops.
+Everything that runs on a schedule, where it runs, and what it costs.
+
+> **Something broken right now?** Go to [runbook.md](runbook.md) — it is
+> organised by symptom and gets you to the fix faster than this page will.
 
 **Nothing here depends on a laptop being awake.** That is deliberate: the July
 2026 outage happened during a five-month gap in work, which is exactly when a

@@ -14,7 +14,8 @@ documents it points to.
 | Why the code is the way it is | [docs/decisions/](docs/decisions/) |
 | The domain vocabulary (mat, bunch, cycle, success rate) | [docs/glossary.md](docs/glossary.md) |
 | Which MCP server to use, and what not to touch | [docs/mcp.md](docs/mcp.md) |
-| What runs on a schedule, and what to do when it stops | [docs/operations.md](docs/operations.md) |
+| **Something is broken right now** | [docs/runbook.md](docs/runbook.md) |
+| What runs on a schedule, and what it costs | [docs/operations.md](docs/operations.md) |
 | How to perform a specific kind of change | `.claude/skills/` — see below |
 
 ## Skills

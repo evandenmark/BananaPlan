@@ -4,8 +4,12 @@ name: Production health check
 # monitors cannot report that thing being down — it just stops running, and
 # silence looks identical to health.
 #
-# The alert is GitHub's own "workflow failed" email to the repo owner. No new
-# service, no account, nothing to pay for.
+# Alerting is an auto-managed GitHub Issue, not the workflow-failure email.
+# On 2026-07-30 a genuine failed run produced NO notification record at all, so
+# the email path is unverified and possibly silent. An issue is verifiable: it
+# is visible in the repo, notifies reliably, and leaves a readable trail of past
+# outages. It opens on failure, comments while still failing, and closes itself
+# on recovery — so an open `outage` issue always means a live problem.
 #
 # What this does NOT cover:
 #   - Whether a Vercel cron is actually registered. Nothing reachable over HTTP
@@ -28,8 +32,12 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
     steps:
       - name: Check production
+        id: probe
         run: |
           BASE=https://bananaplan.vercel.app
 
@@ -89,3 +97,46 @@ jobs:
 
           if [ "$failed" = 1 ]; then exit 1; fi
           echo "All checks passed."
+
+      # A failed workflow run relies on GitHub's email notification, which is
+      # invisible from here and was confirmed on 2026-07-30 to produce no
+      # notification record at all. An issue is verifiable: it shows in the repo,
+      # notifies reliably, and leaves a trail of outages you can read later.
+      - name: Open an outage issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # One issue per outage, not one per run — this fires every 3 hours.
+          EXISTING=$(gh issue list --label outage --state open --limit 1 --json number -q '.[0].number')
+          if [ -n "$EXISTING" ]; then
+            echo "Outage issue #$EXISTING already open; adding a note."
+            gh issue comment "$EXISTING" --body "Still failing as of $(date -u '+%Y-%m-%d %H:%M UTC'). [Run]($RUN_URL)"
+          else
+            gh label create outage --color b60205 --description "Production health check failing" 2>/dev/null || true
+            gh issue create \
+              --title "Production health check failing" \
+              --label outage \
+              --body "$(printf '%s\n' \
+                "The production health check failed at $(date -u '+%Y-%m-%d %H:%M UTC')." \
+                "" \
+                "**[See the run for which check failed and what it means]($RUN_URL)**" \
+                "" \
+                "The error message names the layer: whole site down points at Vercel or the app," \
+                "\`/more\` up with \`/fields\` down points at the database." \
+                "" \
+                "Runbook: [docs/runbook.md](../blob/main/docs/runbook.md)" \
+                "" \
+                "This issue closes itself when a later run passes.")"
+          fi
+
+      # Auto-resolve, so a stale open issue always means a live problem.
+      - name: Close the outage issue on recovery
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for n in $(gh issue list --label outage --state open --json number -q '.[].number'); do
+            gh issue close "$n" --comment "Recovered — health check passed at $(date -u '+%Y-%m-%d %H:%M UTC')."
+          done
