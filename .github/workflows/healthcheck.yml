@@ -22,6 +22,11 @@ on:
   schedule:
     - cron: "0 */3 * * *" # every 3 hours
   workflow_dispatch:
+    inputs:
+      simulate_failure:
+        description: "Force a failure to test that alerting actually fires"
+        type: boolean
+        default: false
 
 concurrency:
   group: healthcheck
@@ -38,7 +43,17 @@ jobs:
     steps:
       - name: Check production
         id: probe
+        env:
+          SIMULATE_FAILURE: ${{ inputs.simulate_failure }}
         run: |
+          # An alerting path nobody has fired is not known to work — the email
+          # path this replaced was assumed good for two days and produced no
+          # notification at all. This makes the failure path testable on demand.
+          if [ "${SIMULATE_FAILURE:-false}" = "true" ]; then
+            echo "::error::SIMULATED FAILURE — this is a test of the alerting path, production is fine."
+            exit 1
+          fi
+
           BASE=https://bananaplan.vercel.app
 
           # One transient blip must not send mail. A check that cries wolf gets
