@@ -183,31 +183,42 @@ readable outage history.
 | Keepalive stopped | Nothing, until Supabase's pause warning ~1 week ahead | Weak, see §3b |
 | Database paused | Health check, as "database down" | **Verified** against a real outage |
 
-### Push notification is NOT verified — check this once
+### Delivery is confirmed
 
-Everything above is verified except whether a notification actually reaches you.
+Email delivery was tested on 2026-07-30 and **arrived**. The full chain is
+therefore proven: detect → classify → open an issue → notify → auto-close.
 
-On 2026-07-30, a genuinely failed run produced **no notification record at all**,
-which is why alerting moved off the workflow-failure email. The issue mechanism
-is strictly better because it leaves a record you can pull with the command
-above — but the issue is opened by `github-actions[bot]`, and GitHub only pushes
-that to you if you watch the repository.
+Do not take that on faith after changing anything about the workflow. It looked
+correct and was silent twice during setup — once because the failure email
+produced no notification record, once because `gh` could not infer the repo
+without a checkout step. Re-test with the hook below.
 
-**Confirm it once:** open
-[github.com/evandenmark/BananaPlan](https://github.com/evandenmark/BananaPlan),
-set **Watch → All Activity**, then fire a test:
+### Testing alerting without breaking anything
 
 ```bash
+# Fire a fake failure: opens a real outage issue, touches nothing in production
 gh workflow run healthcheck.yml --repo evandenmark/BananaPlan -f simulate_failure=true
+
+# Run it normally afterwards — this closes the issue again
+gh workflow run healthcheck.yml --repo evandenmark/BananaPlan
 ```
 
-That opens a real outage issue without touching production. If a notification
-arrives, alerting is proven end to end; if not, you are relying on the pull check
-above and should consider an external uptime service. Run the workflow again
-normally afterwards to close the issue.
+The error in a simulated run says `SIMULATED FAILURE`, so a test alert is never
+mistaken for a real one.
 
-Do not skip this because the plumbing "looks right". It looked right twice
-already and was silent both times.
+### It does not nag you when things are fine
+
+Verified on a passing run: the issue-creating step is **skipped**, and the
+close step is a no-op when nothing is open. The workflow sends nothing on
+success — no issue, no comment, no mail.
+
+If you are getting mail for *successful* runs, that is a GitHub account setting
+rather than this workflow:
+[Settings → Notifications](https://github.com/settings/notifications) → Actions →
+notify on **failed workflows only**.
+
+The one message you will get on a good day is the recovery comment closing an
+outage issue — the all-clear after a real incident, which is worth having.
 
 ### Gaps, stated plainly
 
