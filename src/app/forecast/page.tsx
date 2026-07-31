@@ -15,7 +15,8 @@ import {
   type InventoryRow,
   type HarvestRecord,
 } from "@/lib/forecast";
-import { ForecastChart, type ChartMonth } from "./forecast-chart";
+import { ForecastChart } from "./forecast-chart";
+import { buildChartMonths } from "@/lib/chart-months";
 
 function getMonthlyOrderLbs(
   allOrders: {
@@ -140,9 +141,11 @@ export default async function ForecastPage() {
       (actualsByMonth[key][h.varietyName] || 0) + parseFloat(h.pounds);
   }
 
-  // Collect all variety names from both actuals (past 3 months) and forecast (next 6)
+  // Collect all variety names from both actuals and forecast. The range runs to
+  // i <= 0 because the current month now draws recorded weight too — a variety
+  // whose only record is from this month still needs a colour and a pill.
   const chartVarietySet = new Set<string>();
-  for (let i = -3; i < 0; i++) {
+  for (let i = -3; i <= 0; i++) {
     const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     for (const v of Object.keys(actualsByMonth[key] ?? {})) chartVarietySet.add(v);
@@ -155,38 +158,12 @@ export default async function ForecastPage() {
   }
   const chartVarieties = [...chartVarietySet].sort();
 
-  // Build one row per month: i = -3 (3 months ago) … +5 (5 months ahead)
-  const chartData: ChartMonth[] = [];
-  for (let i = -3; i < 6; i++) {
-    const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
-    const year = d.getFullYear();
-    const month = d.getMonth() + 1;
-    const monthKey = `${year}-${String(month).padStart(2, "0")}`;
-    const label = d.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
-    const isActual = i < 0;
-
-    const row: ChartMonth = { monthLabel: label, isActual };
-    for (const v of chartVarieties) row[v] = 0;
-
-    if (isActual) {
-      const monthActuals = actualsByMonth[monthKey] ?? {};
-      for (const [vName, lbs] of Object.entries(monthActuals)) {
-        if (chartVarieties.includes(vName)) row[vName] = Math.round(lbs);
-      }
-    } else {
-      const groupMatch = grouped.find((g) => g.monthKey === monthKey);
-      if (groupMatch) {
-        for (const event of groupMatch.events) {
-          if (chartVarieties.includes(event.varietyName)) {
-            row[event.varietyName] =
-              (Number(row[event.varietyName]) || 0) + Math.round(event.expectedPounds);
-          }
-        }
-      }
-    }
-
-    chartData.push(row);
-  }
+  const chartData = buildChartMonths({
+    today,
+    varieties: chartVarieties,
+    actualsByMonth,
+    grouped,
+  });
 
   return (
     <div className="p-4">

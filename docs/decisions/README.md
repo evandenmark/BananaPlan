@@ -20,6 +20,7 @@ worse, silently reversing them.
 | [0010](0010-database-keepalive.md) | Daily Vercel cron keeps the free-tier database awake | Accepted |
 | [0011](0011-automated-production-backups.md) | Daily automated backups to a private repo | Accepted |
 | [0012](0012-refuse-deletes-that-break-foreign-keys.md) | Refuse deletes that would break a foreign key | Accepted |
+| [0013](0013-current-month-shows-recorded-beside-expected.md) | Current month draws recorded beside expected | Accepted |
 
 Keep this table in sync — it is the part agents actually read.
 

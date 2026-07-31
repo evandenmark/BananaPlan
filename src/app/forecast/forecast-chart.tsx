@@ -22,67 +22,109 @@ const PALETTE = [
   "#ea580c", // orange-600
 ];
 
-export interface ChartMonth {
-  monthLabel: string;
-  isActual: boolean;
-  [variety: string]: number | string | boolean;
-}
+import {
+  parseSeriesKey,
+  seriesKey,
+  type ChartMonth,
+  type Series,
+} from "@/lib/chart-series";
+
+export type { ChartMonth, Series };
 
 interface Props {
   data: ChartMonth[];
   varieties: string[];
 }
 
+const SERIES_LABEL: Record<Series, string> = {
+  actual: "Recorded",
+  forecast: "Expected",
+};
+
 function CustomTooltip({
   active,
   payload,
   label,
   selected,
-  actualLabels,
 }: {
   active?: boolean;
   payload?: { name: string; value: number; fill: string }[];
   label?: string;
   selected: string;
-  actualLabels: Set<string>;
 }) {
   if (!active || !payload || payload.length === 0) return null;
-  const visible = payload.filter((p) => p.value > 0);
-  const total = visible.reduce((s, p) => s + p.value, 0);
-  const isActual = label ? actualLabels.has(label) : false;
+
+  // Split the payload back into its two series, so a month holding both never
+  // presents them as a single number.
+  const bySeries: Record<
+    Series,
+    { variety: string; value: number; fill: string }[]
+  > = { actual: [], forecast: [] };
+
+  for (const p of payload) {
+    if (!(p.value > 0)) continue;
+    const parsed = parseSeriesKey(p.name);
+    if (!parsed) continue;
+    bySeries[parsed.series].push({
+      variety: parsed.variety,
+      value: p.value,
+      fill: p.fill,
+    });
+  }
+
+  const sections = (["actual", "forecast"] as Series[]).filter(
+    (s) => bySeries[s].length > 0
+  );
+  if (sections.length === 0) return null;
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl shadow-lg p-3 text-sm min-w-[160px]">
-      <div className="flex items-center justify-between gap-3 mb-2">
-        <p className="font-semibold text-gray-900">{label}</p>
-        <span
-          className={`text-xs px-1.5 py-0.5 rounded font-medium ${
-            isActual
-              ? "bg-gray-100 text-gray-600"
-              : "bg-green-50 text-green-700"
-          }`}
-        >
-          {isActual ? "Actual" : "Forecast"}
-        </span>
-      </div>
-      {visible.map((p) => (
-        <div key={p.name} className="flex justify-between gap-4 text-gray-700">
-          <span className="flex items-center gap-1.5">
-            <span
-              className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
-              style={{ background: p.fill }}
-            />
-            {p.name}
-          </span>
-          <span className="font-medium">{Math.round(p.value)} lbs</span>
-        </div>
-      ))}
-      {selected === "all" && visible.length > 1 && (
-        <div className="border-t border-gray-100 mt-2 pt-2 flex justify-between font-semibold text-gray-900">
-          <span>Total</span>
-          <span>{Math.round(total)} lbs</span>
-        </div>
-      )}
+    <div className="bg-white border border-gray-200 rounded-xl shadow-lg p-3 text-sm min-w-[180px]">
+      <p className="font-semibold text-gray-900 mb-2">{label}</p>
+
+      {sections.map((series, idx) => {
+        const rows = bySeries[series];
+        const total = rows.reduce((s, r) => s + r.value, 0);
+        return (
+          <div
+            key={series}
+            className={idx > 0 ? "border-t border-gray-100 mt-2 pt-2" : ""}
+          >
+            <p
+              className={`text-xs font-medium mb-1 ${
+                series === "actual" ? "text-gray-500" : "text-green-700"
+              }`}
+            >
+              {SERIES_LABEL[series]}
+            </p>
+            {rows.map((r) => (
+              <div
+                key={r.variety}
+                className="flex justify-between gap-4 text-gray-700"
+              >
+                <span className="flex items-center gap-1.5">
+                  {/* Match the bar: recorded is drawn faded, so its swatch is
+                      too, or the tooltip contradicts the legend. */}
+                  <span
+                    className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
+                    style={{
+                      background: r.fill,
+                      opacity: series === "actual" ? 0.45 : 1,
+                    }}
+                  />
+                  {r.variety}
+                </span>
+                <span className="font-medium">{Math.round(r.value)} lbs</span>
+              </div>
+            ))}
+            {selected === "all" && rows.length > 1 && (
+              <div className="flex justify-between gap-4 font-semibold text-gray-900 mt-1">
+                <span>Total</span>
+                <span>{Math.round(total)} lbs</span>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -104,13 +146,14 @@ export function ForecastChart({ data, varieties }: Props) {
   const firstActualLabel = actualMonths[0]?.monthLabel;
   const lastActualLabel = actualMonths[actualMonths.length - 1]?.monthLabel;
   const firstForecastLabel = data.find((d) => !d.isActual)?.monthLabel;
-  const actualLabels = new Set(actualMonths.map((d) => d.monthLabel));
+
+  const lastIndex = visibleVarieties.length - 1;
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-4">
       <h2 className="font-semibold text-gray-900 mb-1">9-Month Overview</h2>
       <p className="text-xs text-gray-500 mb-3">
-        Shaded = recorded weight · Unshaded = forecast · tap a variety to filter
+        Faded = recorded weight · solid = forecast · tap a variety to filter
       </p>
 
       {/* Filter pills */}
@@ -153,9 +196,10 @@ export function ForecastChart({ data, varieties }: Props) {
         <BarChart
           data={data}
           margin={{ top: 0, right: 4, left: -18, bottom: 0 }}
-          barCategoryGap="25%"
+          barCategoryGap="12%"
+          barGap={2}
         >
-          {/* Shade the past (actual) months */}
+          {/* Shade the months that are wholly in the past */}
           {firstActualLabel && lastActualLabel && (
             <ReferenceArea
               x1={firstActualLabel}
@@ -165,7 +209,7 @@ export function ForecastChart({ data, varieties }: Props) {
             />
           )}
 
-          {/* Dashed divider at the start of the forecast */}
+          {/* Dashed divider where projection starts */}
           {firstForecastLabel && (
             <ReferenceLine
               x={firstForecastLabel}
@@ -186,34 +230,48 @@ export function ForecastChart({ data, varieties }: Props) {
             axisLine={false}
           />
           <Tooltip
-            content={
-              <CustomTooltip selected={selected} actualLabels={actualLabels} />
-            }
+            content={<CustomTooltip selected={selected} />}
             cursor={{ fill: "rgba(0,0,0,0.04)" }}
           />
+
+          {/* Two stacks per month. Recorded is drawn lighter than expected so a
+              pair reads as one variety in two states, not two varieties. Every
+              month reserves both slots, which is why a month carrying a single
+              series renders narrower and off-centre — see ADR 0013. */}
           {visibleVarieties.map((variety, i) => (
             <Bar
-              key={variety}
-              dataKey={variety}
-              stackId="a"
+              key={seriesKey(variety, "actual")}
+              dataKey={seriesKey(variety, "actual")}
+              stackId="actual"
               fill={colorMap[variety]}
-              radius={
-                i === visibleVarieties.length - 1 ? [3, 3, 0, 0] : [0, 0, 0, 0]
-              }
+              fillOpacity={0.45}
+              radius={i === lastIndex ? [3, 3, 0, 0] : [0, 0, 0, 0]}
+            />
+          ))}
+          {visibleVarieties.map((variety, i) => (
+            <Bar
+              key={seriesKey(variety, "forecast")}
+              dataKey={seriesKey(variety, "forecast")}
+              stackId="forecast"
+              fill={colorMap[variety]}
+              radius={i === lastIndex ? [3, 3, 0, 0] : [0, 0, 0, 0]}
             />
           ))}
         </BarChart>
       </ResponsiveContainer>
 
-      {/* Actual / Forecast legend */}
+      {/* Recorded / Expected legend */}
       <div className="flex gap-4 mt-2 justify-end text-xs text-gray-500">
         <span className="flex items-center gap-1.5">
-          <span className="inline-block w-3 h-3 rounded-sm bg-gray-200" />
-          Actual (weight log)
+          <span
+            className="inline-block w-3 h-3 rounded-sm bg-green-600"
+            style={{ opacity: 0.45 }}
+          />
+          Recorded (weight log)
         </span>
         <span className="flex items-center gap-1.5">
           <span className="inline-block w-3 h-3 rounded-sm bg-green-600" />
-          Forecast
+          Expected (forecast)
         </span>
       </div>
     </div>
