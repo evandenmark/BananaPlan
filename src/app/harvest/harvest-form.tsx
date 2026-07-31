@@ -199,7 +199,9 @@ export function HarvestClient({
                 </div>
               ))}
             </div>
-            <div className="p-4 border-t border-gray-200">
+            {/* pb-20 clears the fixed bottom nav, which shares this overlay's
+                z-50 and paints over it. Matches the gutter in layout.tsx. */}
+            <div className="p-4 pb-20 border-t border-gray-200">
               <button
                 onClick={handleSubmit}
                 disabled={
@@ -271,7 +273,9 @@ export function HarvestClient({
                 />
               </div>
             </div>
-            <div className="p-4 border-t border-gray-200">
+            {/* pb-20 clears the fixed bottom nav, which shares this overlay's
+                z-50 and paints over it. Matches the gutter in layout.tsx. */}
+            <div className="p-4 pb-20 border-t border-gray-200">
               <button
                 onClick={handleEditSubmit}
                 disabled={isPending}
