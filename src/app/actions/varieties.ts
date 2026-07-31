@@ -5,6 +5,11 @@ import { varieties } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { revalidateFor } from "@/lib/revalidate";
+import {
+  describeReferences,
+  referenceTotal,
+  varietyReferences,
+} from "@/lib/references";
 
 export async function createVariety(formData: FormData) {
   await db.insert(varieties).values({
@@ -49,7 +54,29 @@ export async function updateVariety(id: number, formData: FormData) {
   redirect("/varieties");
 }
 
-export async function deleteVariety(id: number) {
+export type DeleteResult =
+  | { deleted: true }
+  | { deleted: false; reason: string };
+
+/**
+ * Delete a variety, unless something still references it.
+ *
+ * Plantings, orders and harvest records all carry a `variety_id` foreign key.
+ * Deleting a referenced variety raises a constraint violation in Postgres, and
+ * cascading instead would destroy harvest history — which the constitution
+ * makes the source of truth about the past. So an in-use variety is refused,
+ * and the caller is told what is in the way. See ADR 0012.
+ */
+export async function deleteVariety(id: number): Promise<DeleteResult> {
+  const refs = await varietyReferences(id);
+  if (referenceTotal(refs) > 0) {
+    // The list page revalidates and re-renders showing the same counts, so the
+    // operator sees why the row is still there.
+    revalidateFor(["varieties"]);
+    return { deleted: false, reason: describeReferences(refs) };
+  }
+
   await db.delete(varieties).where(eq(varieties.id, id));
   revalidateFor(["varieties"]);
+  return { deleted: true };
 }

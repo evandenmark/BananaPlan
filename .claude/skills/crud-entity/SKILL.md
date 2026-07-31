@@ -54,6 +54,8 @@ export async function updateWidget(id: number, formData: FormData) {
   redirect("/widgets");
 }
 
+// Only correct for a LEAF table. If anything references widgets, guard it —
+// see below.
 export async function deleteWidget(id: number) {
   await db.delete(widgets).where(eq(widgets.id, id));
   revalidateFor(["widgets"]);
@@ -71,6 +73,14 @@ Conventions that are load-bearing:
   `formData.get("pounds") as string` straight through. Do not `parseFloat` on
   the way in.
 - `updatedAt: new Date()` on every update, if the table has the column.
+- **If anything holds a foreign key to the new table, its delete must count
+  those references first** and return `{ deleted: false, reason }` rather than
+  throwing — add a spec list to
+  [`src/lib/references.ts`](../../../src/lib/references.ts) and copy
+  `deleteVariety`. Every foreign key here is a plain `references()`, so an
+  unguarded delete of a referenced row hits the "Something went wrong" boundary.
+  The list page must not render a Delete button that can only fail. See
+  [ADR 0012](../../../docs/decisions/0012-refuse-deletes-that-break-foreign-keys.md).
 - **`revalidateFor([...tables])` before the `redirect`** — never a hand-written
   `revalidatePath` ([ADR 0008](../../../docs/decisions/0008-centralized-revalidation.md)).
   Pass the concrete id for a dynamic route when the action knows it; omit it to

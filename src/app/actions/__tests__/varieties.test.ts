@@ -2,7 +2,13 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { db } from "@/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { varieties } from "@/db/schema";
+import {
+  bunchHarvests,
+  fieldInventory,
+  orders,
+  varieties,
+  weightHarvests,
+} from "@/db/schema";
 import {
   createVariety,
   updateVariety,
@@ -14,6 +20,7 @@ vi.mock("@/db", () => ({
     insert: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
+    select: vi.fn(),
   },
 }));
 
@@ -26,6 +33,26 @@ let mockInsertValues: ReturnType<typeof vi.fn>;
 let mockUpdateSet: ReturnType<typeof vi.fn>;
 let mockUpdateWhere: ReturnType<typeof vi.fn>;
 let mockDeleteWhere: ReturnType<typeof vi.fn>;
+
+/**
+ * How many rows each table holds for the variety under test. `deleteVariety`
+ * counts these before deleting, so a test makes a variety "in use" by bumping
+ * one of them.
+ */
+let referenceCounts: {
+  fieldInventory: number;
+  orders: number;
+  bunchHarvests: number;
+  weightHarvests: number;
+};
+
+const countForTable = (table: unknown) => {
+  if (table === fieldInventory) return referenceCounts.fieldInventory;
+  if (table === orders) return referenceCounts.orders;
+  if (table === bunchHarvests) return referenceCounts.bunchHarvests;
+  if (table === weightHarvests) return referenceCounts.weightHarvests;
+  return 0;
+};
 
 const baseVarietyFormData = () => {
   const fd = new FormData();
@@ -53,6 +80,18 @@ beforeEach(() => {
 
   mockDeleteWhere = vi.fn().mockResolvedValue([]);
   vi.mocked(db.delete).mockReturnValue({ where: mockDeleteWhere } as any);
+
+  referenceCounts = {
+    fieldInventory: 0,
+    orders: 0,
+    bunchHarvests: 0,
+    weightHarvests: 0,
+  };
+  vi.mocked(db.select).mockReturnValue({
+    from: (table: unknown) => ({
+      where: () => Promise.resolve([{ n: countForTable(table) }]),
+    }),
+  } as any);
 });
 
 // ── createVariety ─────────────────────────────────────────────────────────────
@@ -168,10 +207,12 @@ describe("updateVariety", () => {
 // ── deleteVariety ─────────────────────────────────────────────────────────────
 
 describe("deleteVariety", () => {
-  it("deletes the variety by id", async () => {
-    await deleteVariety(10);
+  it("deletes the variety by id when nothing references it", async () => {
+    const result = await deleteVariety(10);
+
     expect(db.delete).toHaveBeenCalledWith(varieties);
     expect(mockDeleteWhere).toHaveBeenCalled();
+    expect(result).toEqual({ deleted: true });
   });
 
   it("revalidates /varieties", async () => {
@@ -182,5 +223,43 @@ describe("deleteVariety", () => {
   it("does NOT redirect", async () => {
     await deleteVariety(10);
     expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["fieldInventory", "1 planting"],
+    ["orders", "1 order"],
+    ["bunchHarvests", "1 bunch harvest"],
+    ["weightHarvests", "1 weight record"],
+  ] as const)(
+    "refuses to delete a variety referenced by %s",
+    async (table, reason) => {
+      referenceCounts[table] = 1;
+
+      const result = await deleteVariety(10);
+
+      expect(db.delete).not.toHaveBeenCalled();
+      expect(result).toEqual({ deleted: false, reason });
+    }
+  );
+
+  it("names every kind of reference that is in the way", async () => {
+    referenceCounts.fieldInventory = 5;
+    referenceCounts.bunchHarvests = 2;
+    referenceCounts.weightHarvests = 1;
+
+    const result = await deleteVariety(10);
+
+    expect(result).toEqual({
+      deleted: false,
+      reason: "5 plantings, 2 bunch harvests and 1 weight record",
+    });
+  });
+
+  it("still revalidates /varieties when the delete is refused", async () => {
+    referenceCounts.fieldInventory = 1;
+
+    await deleteVariety(10);
+
+    expect(revalidatePath).toHaveBeenCalledWith("/varieties");
   });
 });

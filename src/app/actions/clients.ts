@@ -24,10 +24,24 @@ export async function updateClient(id: number, formData: FormData) {
   redirect(`/clients/${id}`);
 }
 
+/**
+ * Delete a client and the orders that belong to it.
+ *
+ * This is the one delete in the app that cascades, and it is deliberate:
+ * `orders.client_id` is `NOT NULL`, so an order cannot outlive its client, and
+ * an order is a statement of future demand rather than a record of what was
+ * harvested. Nothing about the past is lost. The two statements run in one
+ * transaction so a failure between them cannot strand a client with its orders
+ * already gone. See ADR 0012.
+ *
+ * `/clients/[id]` shows the operator how many orders go with the client before
+ * they tap Delete.
+ */
 export async function deleteClient(id: number) {
-  // The client's orders go with it, so both tables are revalidated.
-  await db.delete(orders).where(eq(orders.clientId, id));
-  await db.delete(clients).where(eq(clients.id, id));
+  await db.transaction(async (tx) => {
+    await tx.delete(orders).where(eq(orders.clientId, id));
+    await tx.delete(clients).where(eq(clients.id, id));
+  });
   revalidateFor(["clients", "orders"]);
   redirect("/clients");
 }

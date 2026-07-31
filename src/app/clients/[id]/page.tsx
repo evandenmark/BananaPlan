@@ -46,7 +46,7 @@ export default async function ClientDetailPage({
         </Link>
       </div>
 
-      <div className="flex items-center justify-between mt-2 mb-6">
+      <div className="flex items-center justify-between mt-2 mb-2">
         <h1 className="text-2xl font-bold text-gray-900">{client.name}</h1>
         <div className="flex gap-3">
           <Link
@@ -67,6 +67,15 @@ export default async function ClientDetailPage({
           </form>
         </div>
       </div>
+
+      {/* Deleting a client takes its orders with it — say so before the tap. */}
+      <p className="text-sm text-gray-500 mb-6">
+        {clientOrders.length === 0
+          ? "No orders — deleting this client removes nothing else."
+          : `Deleting this client also deletes ${clientOrders.length} ${
+              clientOrders.length === 1 ? "order" : "orders"
+            }.`}
+      </p>
 
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-base font-semibold text-gray-900">Orders</h2>

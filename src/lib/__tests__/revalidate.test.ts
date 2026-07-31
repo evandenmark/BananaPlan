@@ -14,7 +14,32 @@ const pathsCalled = () =>
 describe("revalidateFor", () => {
   it("revalidates every route that displays the table", () => {
     revalidateFor(["bunchHarvests"]);
-    expect(pathsCalled().sort()).toEqual(["/", "/forecast", "/harvest"]);
+    expect(pathsCalled().sort()).toEqual([
+      "/",
+      "/forecast",
+      "/harvest",
+      "/varieties",
+    ]);
+  });
+
+  // The Delete button on these pages is rendered from reference counts
+  // (ADR 0012), so writing a child table has to invalidate the parent's list.
+  it("revalidates /varieties for every table that references a variety", () => {
+    for (const table of [
+      "fieldInventory",
+      "orders",
+      "bunchHarvests",
+      "weightHarvests",
+    ] as const) {
+      vi.mocked(revalidatePath).mockClear();
+      revalidateFor([table]);
+      expect(pathsCalled()).toContain("/varieties");
+    }
+  });
+
+  it("revalidates /sites when fields change, which decide if a site is deletable", () => {
+    revalidateFor(["fields"]);
+    expect(pathsCalled()).toContain("/sites");
   });
 
   it("revalidates /forecast for weight harvests, which the chart shows as actuals", () => {

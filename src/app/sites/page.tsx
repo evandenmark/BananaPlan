@@ -3,9 +3,18 @@ import { sites } from "@/db/schema";
 import { asc } from "drizzle-orm";
 import Link from "next/link";
 import { deleteSite } from "@/app/actions/sites";
+import {
+  describeReferences,
+  referenceTotal,
+  siteReferencesById,
+} from "@/lib/references";
 
 export default async function SitesPage() {
   const rows = await db.select().from(sites).orderBy(asc(sites.name));
+
+  // A site that still has fields cannot be deleted — show what is holding it
+  // instead of a button that can only fail.
+  const referencesById = await siteReferencesById();
 
   return (
     <div className="p-4">
@@ -25,7 +34,11 @@ export default async function SitesPage() {
         </p>
       ) : (
         <div className="space-y-3">
-          {rows.map((s) => (
+          {rows.map((s) => {
+            const refs = referencesById.get(s.id) ?? [];
+            const inUse = referenceTotal(refs) > 0;
+
+            return (
             <div
               key={s.id}
               className="bg-white rounded-xl border border-gray-200 p-4"
@@ -46,23 +59,32 @@ export default async function SitesPage() {
                   >
                     Edit
                   </Link>
-                  <form
-                    action={async () => {
-                      "use server";
-                      await deleteSite(s.id);
-                    }}
-                  >
-                    <button
-                      type="submit"
-                      className="text-sm text-red-600 font-medium px-2 py-1 active:opacity-60 transition-opacity"
+                  {!inUse && (
+                    <form
+                      action={async () => {
+                        "use server";
+                        await deleteSite(s.id);
+                      }}
                     >
-                      Delete
-                    </button>
-                  </form>
+                      <button
+                        type="submit"
+                        className="text-sm text-red-600 font-medium px-2 py-1 active:opacity-60 transition-opacity"
+                      >
+                        Delete
+                      </button>
+                    </form>
+                  )}
                 </div>
               </div>
+
+              {inUse && (
+                <p className="mt-3 pt-3 border-t border-gray-100 text-sm text-gray-500">
+                  Holds {describeReferences(refs)} — can&rsquo;t be deleted.
+                </p>
+              )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

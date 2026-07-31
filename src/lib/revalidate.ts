@@ -14,8 +14,19 @@ import { revalidatePath } from "next/cache";
  */
 const ROUTES_BY_TABLE = {
   sites: ["/", "/fields", "/fields/[id]", "/harvest", "/forecast", "/sites", "/more"],
-  fields: ["/", "/fields", "/fields/[id]", "/harvest", "/forecast"],
-  fieldInventory: ["/", "/fields", "/fields/[id]", "/harvest", "/forecast"],
+  // `/sites` reads fields to decide whether a site can be deleted (ADR 0012),
+  // and `/varieties` reads all four tables that reference a variety for the
+  // same reason. Those pages show a destructive control based on these counts,
+  // so a stale count is a button that lies.
+  fields: ["/", "/fields", "/fields/[id]", "/harvest", "/forecast", "/sites"],
+  fieldInventory: [
+    "/",
+    "/fields",
+    "/fields/[id]",
+    "/harvest",
+    "/forecast",
+    "/varieties",
+  ],
   varieties: [
     "/",
     "/fields",
@@ -28,9 +39,9 @@ const ROUTES_BY_TABLE = {
     "/more",
   ],
   clients: ["/", "/clients", "/clients/[id]", "/more"],
-  orders: ["/", "/clients", "/clients/[id]", "/forecast", "/more"],
-  bunchHarvests: ["/", "/harvest", "/forecast"],
-  weightHarvests: ["/", "/forecast", "/weight-log"],
+  orders: ["/", "/clients", "/clients/[id]", "/forecast", "/more", "/varieties"],
+  bunchHarvests: ["/", "/harvest", "/forecast", "/varieties"],
+  weightHarvests: ["/", "/forecast", "/weight-log", "/varieties"],
 } as const satisfies Record<string, readonly string[]>;
 
 export type Table = keyof typeof ROUTES_BY_TABLE;

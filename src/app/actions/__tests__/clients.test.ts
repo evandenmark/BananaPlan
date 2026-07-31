@@ -14,6 +14,7 @@ vi.mock("@/db", () => ({
     insert: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
+    transaction: vi.fn(),
   },
 }));
 
@@ -41,6 +42,12 @@ beforeEach(() => {
 
   mockDeleteWhere = vi.fn().mockResolvedValue([]);
   vi.mocked(db.delete).mockReturnValue({ where: mockDeleteWhere } as any);
+
+  // deleteClient cascades inside a transaction; hand the callback a tx whose
+  // `delete` is the same spy, so the assertions below read the same way.
+  vi.mocked(db.transaction).mockImplementation(async (cb: any) =>
+    cb({ delete: db.delete } as any)
+  );
 });
 
 // ── createClient ──────────────────────────────────────────────────────────────
@@ -130,6 +137,22 @@ describe("deleteClient", () => {
   it("calls db.delete twice (orders + clients)", async () => {
     await deleteClient(3);
     expect(db.delete).toHaveBeenCalledTimes(2);
+  });
+
+  it("runs both deletes in one transaction, so it cannot half-apply", async () => {
+    await deleteClient(3);
+    expect(db.transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("deletes nothing outside the transaction, and does not redirect, if it fails", async () => {
+    // Rollback itself is Postgres's job and is not observable here; what this
+    // pins is that no delete is issued outside the transaction and that a
+    // failure is not swallowed into a redirect to /clients.
+    vi.mocked(db.transaction).mockRejectedValue(new Error("deadlock"));
+
+    await expect(deleteClient(3)).rejects.toThrow("deadlock");
+    expect(db.delete).not.toHaveBeenCalled();
+    expect(redirect).not.toHaveBeenCalled();
   });
 
   it("revalidates /clients list page", async () => {

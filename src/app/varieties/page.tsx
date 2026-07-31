@@ -3,12 +3,21 @@ import { varieties } from "@/db/schema";
 import { asc } from "drizzle-orm";
 import Link from "next/link";
 import { deleteVariety } from "@/app/actions/varieties";
+import {
+  describeReferences,
+  referenceTotal,
+  varietyReferencesById,
+} from "@/lib/references";
 
 export default async function VarietiesPage() {
   const rows = await db
     .select()
     .from(varieties)
     .orderBy(asc(varieties.name));
+
+  // A variety that is still planted, ordered or harvested cannot be deleted —
+  // show what is holding it instead of a button that can only fail.
+  const referencesById = await varietyReferencesById();
 
   return (
     <div className="p-4">
@@ -28,7 +37,11 @@ export default async function VarietiesPage() {
         </p>
       ) : (
         <div className="space-y-3">
-          {rows.map((v) => (
+          {rows.map((v) => {
+            const refs = referencesById.get(v.id) ?? [];
+            const inUse = referenceTotal(refs) > 0;
+
+            return (
             <div
               key={v.id}
               className="bg-white rounded-xl border border-gray-200 p-4"
@@ -76,23 +89,32 @@ export default async function VarietiesPage() {
                   >
                     Edit
                   </Link>
-                  <form
-                    action={async () => {
-                      "use server";
-                      await deleteVariety(v.id);
-                    }}
-                  >
-                    <button
-                      type="submit"
-                      className="text-sm text-red-600 font-medium px-2 py-1 active:opacity-60 transition-opacity"
+                  {!inUse && (
+                    <form
+                      action={async () => {
+                        "use server";
+                        await deleteVariety(v.id);
+                      }}
                     >
-                      Delete
-                    </button>
-                  </form>
+                      <button
+                        type="submit"
+                        className="text-sm text-red-600 font-medium px-2 py-1 active:opacity-60 transition-opacity"
+                      >
+                        Delete
+                      </button>
+                    </form>
+                  )}
                 </div>
               </div>
+
+              {inUse && (
+                <p className="mt-3 pt-3 border-t border-gray-100 text-sm text-gray-500">
+                  In use by {describeReferences(refs)} — can&rsquo;t be deleted.
+                </p>
+              )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
