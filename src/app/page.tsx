@@ -12,6 +12,7 @@ import { eq, desc, count } from "drizzle-orm";
 import Link from "next/link";
 import {
   computeForecast,
+  farmToday,
   type InventoryRow,
   type HarvestRecord,
 } from "@/lib/forecast";
@@ -84,13 +85,25 @@ export default async function DashboardPage() {
     harvestRows as HarvestRecord[]
   );
 
-  const now = new Date();
-  const in60Days = new Date(now);
-  in60Days.setDate(now.getDate() + 60);
+  // The farm's calendar date, at midnight — not `new Date()`. Expected dates
+  // are month-granular since ADR 0014, so every current-month event sits at
+  // midnight on the month's last day; comparing that against a `now` carrying a
+  // time of day would drop the entire current month for the whole of that day.
+  const today = farmToday();
+  const in60Days = new Date(today);
+  in60Days.setDate(today.getDate() + 60);
 
-  const upcoming = forecast.filter(
-    (e) => e.expectedDate >= now && e.expectedDate <= in60Days
-  );
+  // Comparing a month-end stamp against a mid-month cutoff would drop a whole
+  // month for the sake of a few days, so an event counts when its *month*
+  // overlaps the window.
+  const upcoming = forecast.filter((e) => {
+    const monthStart = new Date(
+      e.expectedDate.getFullYear(),
+      e.expectedDate.getMonth(),
+      1
+    );
+    return e.expectedDate >= today && monthStart <= in60Days;
+  });
 
   const upcomingBunches = upcoming.reduce((s, e) => s + e.expectedBunches, 0);
   const upcomingPounds = upcoming.reduce((s, e) => s + e.expectedPounds, 0);

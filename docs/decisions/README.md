@@ -21,6 +21,7 @@ worse, silently reversing them.
 | [0011](0011-automated-production-backups.md) | Daily automated backups to a private repo | Accepted |
 | [0012](0012-refuse-deletes-that-break-foreign-keys.md) | Refuse deletes that would break a foreign key | Accepted |
 | [0013](0013-current-month-shows-recorded-beside-expected.md) | Current month draws recorded beside expected | Accepted |
+| [0014](0014-forecast-events-expire-at-month-end.md) | Forecast events live for their whole month, then expire | Accepted |
 
 Keep this table in sync — it is the part agents actually read.
 

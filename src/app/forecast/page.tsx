@@ -11,6 +11,7 @@ import {
 import { eq } from "drizzle-orm";
 import {
   computeForecast,
+  farmToday,
   groupForecastByMonth,
   type InventoryRow,
   type HarvestRecord,
@@ -119,7 +120,9 @@ export default async function ForecastPage() {
   }
 
   // --- Build 9-month chart data: 3 past (actuals) + 6 forward (forecast) ---
-  const today = new Date();
+  // The farm's calendar date, so "this month" is the farm's month and not the
+  // server's — Vercel runs UTC, the farm is UTC-10. See ADR 0014.
+  const today = farmToday();
 
   // Fetch actual weight harvests for variety breakdown
   const actualRows = await db

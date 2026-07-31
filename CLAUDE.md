@@ -55,7 +55,8 @@ See [ADR 0001](docs/decisions/0001-server-actions-and-server-components.md) and
    against your diff, then say in your output what you fixed and what you
    rejected and why. Docs-only and typo changes are exempt. See
    [ADR 0009](docs/decisions/0009-adversarial-review-before-commit.md).
-2. **Run `npm run test:run` before you claim a change works.** 174 tests, ~2s.
+2. **Run `npm run test:run` before you claim a change works.** The suite is
+   fast (~2s); every test must pass, and the count only goes up.
 3. **Never write dates as `new Date("YYYY-MM-DD")` in tests.** That parses as UTC
    and lands on the previous day in Hawaii (UTC-10). Use
    `new Date(year, monthIndex, day)`.

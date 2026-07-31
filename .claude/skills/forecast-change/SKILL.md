@@ -27,7 +27,10 @@ accident is easy.
 4. Generates `totalBunchesPerMat` events — the first at
    `plantingDate + monthsToFirstBunch`, then each subsequent at
    `firstDate + monthsToSubsequent × i` — **all from the original baseline**,
-   each carrying `survivingMats` bunches.
+   each carrying `survivingMats` bunches. Each date is then stamped to the
+   **last day of its own month**
+   ([ADR 0014](../../../docs/decisions/0014-forecast-events-expire-at-month-end.md)),
+   so an event lives for the whole month it belongs to.
 5. Subtracts the harvest pool from the earliest events first, zeroing them as
    consumed, then **sets the pool to 0** — surplus is absorbed, never carried to
    a later planting.
@@ -43,7 +46,13 @@ From [constitution](../../../docs/constitution.md) §4 and ADR 0003:
 - **The forecast is derived, never stored.** Do not add a forecast table, a
   cache, or a materialized column. A stored forecast goes stale the instant a
   planting or harvest is edited.
-- **No past events.** `computeForecast` returns only `date >= today`.
+- **No past months.** `computeForecast` returns only events whose *month* has
+  not ended — dates are month-end stamps and `today` comes from `farmToday()`,
+  not `new Date()`
+  ([ADR 0014](../../../docs/decisions/0014-forecast-events-expire-at-month-end.md)).
+  An event whose exact day has passed but whose month has not is **deliberately
+  still returned**; do not "fix" that back out. Unpicked fruit is written off at
+  month end rather than carried forward, and the ADR records why.
 - **Harvests reduce quantity, not timing.** Do not re-anchor subsequent bunches
   on an actual harvest date — harvest dates record when someone had time to
   pick, so one late pick would distort the whole series.
@@ -68,6 +77,11 @@ This is where forecast bugs actually come from.
   `new Date(row.plantingDate + "T00:00:00")` — **local** midnight, deliberately.
   Dropping the `T00:00:00` makes it UTC and shifts the date a day earlier in
   Hawaii (UTC-10).
+- **Never compare an `expectedDate` against `new Date()`.** Vercel runs UTC and
+  the farm is UTC-10, so the server's day — and at month ends, its month — runs
+  ahead of the farm's. Use `farmToday()` from `src/lib/forecast.ts`. Since every
+  current-month event sits at midnight on the month's last day, comparing
+  against a clock carrying a time of day drops the entire month for that day.
 - In tests, always `new Date(2026, 2, 1)`. Never `new Date("2026-03-01")`.
 
 ## Numeric columns are strings

@@ -42,7 +42,7 @@ npx tsc --noEmit
 npm run build
 ```
 
-All 174 tests must pass and the build must succeed. If anything fails, stop and
+Every test must pass and the build must succeed. If anything fails, stop and
 fix it — a broken build on `main` means production keeps serving the old
 deployment while the repo silently diverges from it.
 

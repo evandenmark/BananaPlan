@@ -1,6 +1,8 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeAll, afterAll, vi } from "vitest";
 import {
   computeForecast,
+  farmDateString,
+  farmToday,
   groupForecastByMonth,
   type InventoryRow,
   type HarvestRecord,
@@ -409,6 +411,188 @@ describe("computeForecast", () => {
 // NOTE: Use new Date(year, month, day) (0-indexed month) for all dates to
 // ensure LOCAL time is used. ISO strings like "2026-06-01" parse as UTC
 // midnight, which shifts to the previous month in UTC-offset timezones.
+
+// ── Month-end ceiling (ADR 0014) ──────────────────────────────────────────────
+
+describe("month-end ceiling", () => {
+  // Local time deliberately, not UTC: the suite's own FAKE_TODAY is
+  // 2026-03-01T00:00:00Z, which is Feb 28 in Hawaii. These tests need "today"
+  // to sit unambiguously mid-month.
+  const MID_MARCH = new Date(2026, 2, 15);
+  // Anchored to a real instant rather than a host-local one: 10:00 UTC is
+  // exactly midnight in Hawaii, so this is April 1 on the farm whatever
+  // timezone the test host is in.
+  const APRIL_1_ON_THE_FARM = new Date(Date.UTC(2026, 3, 1, 10, 1, 0));
+
+  afterEach(() => {
+    vi.setSystemTime(FAKE_TODAY);
+  });
+
+  // Planted 2025-06-01 + 9 months → first bunch computes to 2026-03-01,
+  // two weeks before "today".
+  const rowFruitingEarlierThisMonth = () =>
+    makeRow({
+      plantingDate: "2025-06-01",
+      monthsToFirstBunch: "9",
+      totalBunchesPerMat: 1,
+    });
+
+  it("keeps an event whose exact day has passed but whose month has not", () => {
+    vi.setSystemTime(MID_MARCH);
+
+    const result = computeForecast([rowFruitingEarlierThisMonth()], []);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].expectedBunches).toBe(9); // floor(10 × 0.9)
+  });
+
+  it("reports that event on the last day of its month", () => {
+    vi.setSystemTime(MID_MARCH);
+
+    const [event] = computeForecast([rowFruitingEarlierThisMonth()], []);
+
+    expect(event.expectedDate.getFullYear()).toBe(2026);
+    expect(event.expectedDate.getMonth()).toBe(2); // March
+    expect(event.expectedDate.getDate()).toBe(31);
+  });
+
+  it("drops the event once its month is over", () => {
+    vi.setSystemTime(APRIL_1_ON_THE_FARM);
+
+    expect(computeForecast([rowFruitingEarlierThisMonth()], [])).toHaveLength(0);
+  });
+
+  it("lets a harvest recorded later in the month deduct from that month", () => {
+    vi.setSystemTime(MID_MARCH);
+
+    const withHarvest = computeForecast(
+      [rowFruitingEarlierThisMonth()],
+      [makeHarvest({ bunches: 5, harvestDate: "2026-03-14" })]
+    );
+
+    // 9 surviving mats less 5 recorded. Before the ceiling this deduction
+    // landed on an event that was then discarded, so recording was a no-op.
+    expect(withHarvest).toHaveLength(1);
+    expect(withHarvest[0].expectedBunches).toBe(4);
+  });
+
+  it("ceilings future events too, without moving them to another month", () => {
+    vi.setSystemTime(MID_MARCH);
+
+    // First bunch 2026-03-01, then every 3 months: June, September.
+    const result = computeForecast(
+      [makeRow({ plantingDate: "2025-06-01", monthsToFirstBunch: "9" })],
+      []
+    );
+
+    expect(result.map((e) => e.expectedDate.getMonth())).toEqual([2, 5, 8]);
+    expect(result.map((e) => e.expectedDate.getDate())).toEqual([31, 30, 30]);
+  });
+
+  it("groups ceilinged events into the month they belong to", () => {
+    vi.setSystemTime(MID_MARCH);
+
+    const groups = groupForecastByMonth(
+      computeForecast([rowFruitingEarlierThisMonth()], [])
+    );
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0].monthKey).toBe("2026-03");
+  });
+});
+
+
+// ── Farm timezone (ADR 0014) ──────────────────────────────────────────────────
+
+describe("farmDateString", () => {
+  // These assert on a formatted string, so they hold whatever timezone the
+  // machine running them is in — which is the point: the bug they pin only
+  // appears on a UTC server.
+  it("reports the farm's calendar date, not the server's", () => {
+    // 2026-08-01 02:00 UTC is still 4pm on July 31 in Hawaii.
+    const instant = new Date(Date.UTC(2026, 7, 1, 2, 0, 0));
+    expect(farmDateString(instant)).toBe("2026-07-31");
+  });
+
+  it("agrees with the server when they are in the same day", () => {
+    // 2026-07-15 20:00 UTC is 10am July 15 in Hawaii.
+    expect(farmDateString(new Date(Date.UTC(2026, 6, 15, 20, 0, 0)))).toBe(
+      "2026-07-15"
+    );
+  });
+
+  it("rolls over at Hawaii midnight, not UTC midnight", () => {
+    // 10:00 UTC on Aug 1 is exactly midnight Aug 1 in Hawaii.
+    expect(farmDateString(new Date(Date.UTC(2026, 7, 1, 9, 59, 0)))).toBe(
+      "2026-07-31"
+    );
+    expect(farmDateString(new Date(Date.UTC(2026, 7, 1, 10, 0, 0)))).toBe(
+      "2026-08-01"
+    );
+  });
+});
+
+describe("farmToday", () => {
+  it("returns the farm's date at midnight", () => {
+    const d = farmToday(new Date(Date.UTC(2026, 7, 1, 2, 0, 0)));
+
+    expect(d.getFullYear()).toBe(2026);
+    expect(d.getMonth()).toBe(6); // July
+    expect(d.getDate()).toBe(31);
+    expect(d.getHours()).toBe(0);
+    expect(d.getMinutes()).toBe(0);
+  });
+});
+
+describe("month expiry boundary", () => {
+  afterEach(() => {
+    vi.setSystemTime(FAKE_TODAY);
+  });
+
+  const rowFruitingInMarch = () =>
+    makeRow({
+      plantingDate: "2025-06-01",
+      monthsToFirstBunch: "9",
+      totalBunchesPerMat: 1,
+    });
+
+  it("keeps the month's event on the last day, in the afternoon", () => {
+    // Late on the final day: the event sits at midnight that same day, so a
+    // comparison against a clock carrying a time of day would drop it.
+    vi.setSystemTime(new Date(2026, 2, 31, 16, 30));
+
+    expect(computeForecast([rowFruitingInMarch()], [])).toHaveLength(1);
+  });
+
+  it("still deducts a harvest recorded on the last day of the month", () => {
+    vi.setSystemTime(new Date(2026, 2, 31, 16, 30));
+
+    const result = computeForecast(
+      [rowFruitingInMarch()],
+      [makeHarvest({ bunches: 5, harvestDate: "2026-03-31" })]
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0].expectedBunches).toBe(4); // 9 surviving less 5 recorded
+  });
+
+  it("keeps the event after UTC rolls over but before the farm's month ends", () => {
+    // 2026-04-01 02:00 UTC is 4pm on March 31 in Hawaii. A server reading its
+    // own clock calls this April and discards March; the farm has not finished
+    // picking. This is the case that only fails on a UTC host.
+    vi.setSystemTime(new Date(Date.UTC(2026, 3, 1, 2, 0, 0)));
+
+    expect(computeForecast([rowFruitingInMarch()], [])).toHaveLength(1);
+  });
+
+  it("drops it once the farm's next month begins", () => {
+    // 10:00 UTC on April 1 is exactly midnight April 1 in Hawaii.
+    vi.setSystemTime(new Date(Date.UTC(2026, 3, 1, 10, 1, 0)));
+
+    expect(computeForecast([rowFruitingInMarch()], [])).toHaveLength(0);
+  });
+});
+
 
 describe("groupForecastByMonth", () => {
   function makeEvent(overrides: Partial<ForecastEvent> = {}): ForecastEvent {

@@ -34,6 +34,24 @@ export interface ForecastEvent {
   bunchIndex: number;
 }
 
+/**
+ * Move a date to the last day of its own month.
+ *
+ * A bunch expected on the 1st was previously discarded from the 2nd onward,
+ * because `computeForecast` keeps only events dated today or later. That threw
+ * away fruit nobody had picked, and worse, it made recording a harvest against
+ * that bunch a no-op: the deduction landed on an event that was about to be
+ * filtered out.
+ *
+ * The whole app reasons in months — the forecast page, the chart and the
+ * dashboard all group by month, and no day-level expected date is ever shown.
+ * So an event lives for the month it belongs to, and expires when that month
+ * does. See ADR 0014.
+ */
+function endOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+}
+
 function addMonths(date: Date, months: number): Date {
   const result = new Date(date);
   const wholeMonths = Math.floor(months);
@@ -43,12 +61,45 @@ function addMonths(date: Date, months: number): Date {
   return result;
 }
 
+/** Where the farm is. Dates in this app are its calendar dates, not the server's. */
+const FARM_TIME_ZONE = "Pacific/Honolulu";
+
+/**
+ * The farm's calendar date as `YYYY-MM-DD`.
+ *
+ * Vercel runs functions in UTC while the farm is UTC-10, so for the last ten
+ * hours of every Hawaii day the server has already turned the page. At a month
+ * boundary that discarded the whole month's forecast at 14:00 HST on the last
+ * day — and since harvest deduction happens before the date filter, a harvest
+ * recorded in that window was silently a no-op, which is the exact failure
+ * ADR 0014 exists to remove.
+ */
+export function farmDateString(now: Date = new Date()): string {
+  // en-CA formats as YYYY-MM-DD.
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: FARM_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+}
+
+/**
+ * The farm's today, as a Date at local midnight — the same frame event dates
+ * live in, since those come from `new Date(plantingDate + "T00:00:00")`. Both
+ * sides are calendar dates, so the comparison is calendar-to-calendar and does
+ * not depend on the server's timezone.
+ */
+export function farmToday(now: Date = new Date()): Date {
+  const [year, month, day] = farmDateString(now).split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
 export function computeForecast(
   inventoryRows: InventoryRow[],
   harvestRecords: HarvestRecord[]
 ): ForecastEvent[] {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = farmToday();
 
   // Build harvest totals keyed by "fieldId:varietyId"
   const harvestTotals: Record<string, number> = {};
@@ -94,7 +145,9 @@ export function computeForecast(
     for (let i = 0; i < totalBunches; i++) {
       const date =
         i === 0 ? firstDate : addMonths(firstDate, monthsSubsequent * i);
-      events.push({ date, bunches: survivingMats, bunchIndex: i });
+      // Ceiling to the month's end so the event survives its own month. The
+      // month is unchanged, so grouping is unaffected.
+      events.push({ date: endOfMonth(date), bunches: survivingMats, bunchIndex: i });
     }
 
     // Subtract harvested bunches from earliest events first,
